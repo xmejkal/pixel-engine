@@ -1,13 +1,16 @@
-# The engine module (P589 probe): the world in engine/core and its MicroPython binding. --- probe, throwaway (P589) ---
+# The engine module: the world (P589 probe, throwaway) and the fire (P595, MVP) in engine/core, and their MicroPython
+# binding. The binding draws into s3lcd's frame, so it reads s3lcd's header.
 add_library(usermod_engine INTERFACE)
 
 target_sources(usermod_engine INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/binding.c
     ${CMAKE_CURRENT_LIST_DIR}/core/world.c
+    ${CMAKE_CURRENT_LIST_DIR}/core/fx_fire.c
     )
 
 target_include_directories(usermod_engine INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/core
+    ${CMAKE_CURRENT_LIST_DIR}/../s3lcd/src
     )
 
 target_link_libraries(usermod INTERFACE usermod_engine)
