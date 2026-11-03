@@ -1,5 +1,6 @@
 // The engine module (P589 probe): the thin MicroPython binding of engine/core/world.c, for probe589.py to time a C
-// step, its events and a call back into Python. One float world and one fixed world, loaded together.
+// step, its events and a call back into Python. One float world and one fixed world, loaded together. spawn and read
+// (P593) are the rain demo's, on the float world only.
 // --- probe, throwaway (P589) ---
 #include "py/runtime.h"
 
@@ -33,7 +34,7 @@ static mp_obj_t engine_load(size_t n_args, const mp_obj_t *args) {
         n = len;
     }
     if (n > WORLD_MAX_BODIES) {
-        mp_raise_ValueError(MP_ERROR_TEXT("more than 64 bodies"));
+        mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("more than %d bodies"), WORLD_MAX_BODIES);
     }
     world_load_float(&world_f, (int32_t)n, c[0], c[1], c[2], c[3], c[4]);
     world_load_fixed(&world_q, (int32_t)n, c[0], c[1], c[2], c[3], c[4]);
@@ -82,6 +83,31 @@ static mp_obj_t engine_read_y(mp_obj_t mode_in, mp_obj_t out_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(engine_read_y_obj, engine_read_y);
 
+// spawn(i, x, y, vx, vy, rest_y): body i of the float world at this state, awake; n grows to i + 1 when i is past it.
+static mp_obj_t engine_spawn(size_t n_args, const mp_obj_t *args) {
+    float v[5];
+    for (size_t k = 0; k < 5; k++) {
+        v[k] = (float)mp_obj_get_float(args[k + 1]);
+    }
+    if (!world_spawn_float(&world_f, (int32_t)mp_obj_get_int(args[0]), v[0], v[1], v[2], v[3], v[4])) {
+        mp_raise_msg_varg(&mp_type_IndexError, MP_ERROR_TEXT("a body index is 0 to %d"), WORLD_MAX_BODIES - 1);
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(engine_spawn_obj, 6, 6, engine_spawn);
+
+// read(out): the float world's x, y and asleep per body into an array('h') of at least 3n, as ints; returns n.
+static mp_obj_t engine_read(mp_obj_t out_in) {
+    mp_buffer_info_t info;
+    mp_get_buffer_raise(out_in, &info, MP_BUFFER_WRITE);
+    if (info.typecode != 'h' || info.len < (size_t)world_f.s.n * 3 * sizeof(int16_t)) {
+        mp_raise_ValueError(MP_ERROR_TEXT("an array('h') of 3n ints is needed"));
+    }
+    world_read_float(&world_f, info.buf);
+    return MP_OBJ_NEW_SMALL_INT(world_f.s.n);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(engine_read_obj, engine_read);
+
 // drain(buf, n): up to n of the float world's last step-call events into an array('i') as id, kind, speed; how many.
 static mp_obj_t engine_drain(mp_obj_t buf_in, mp_obj_t n_in) {
     mp_buffer_info_t info;
@@ -118,6 +144,8 @@ static const mp_rom_map_elem_t engine_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_load), MP_ROM_PTR(&engine_load_obj) },
     { MP_ROM_QSTR(MP_QSTR_step), MP_ROM_PTR(&engine_step_obj) },
     { MP_ROM_QSTR(MP_QSTR_read_y), MP_ROM_PTR(&engine_read_y_obj) },
+    { MP_ROM_QSTR(MP_QSTR_spawn), MP_ROM_PTR(&engine_spawn_obj) },
+    { MP_ROM_QSTR(MP_QSTR_read), MP_ROM_PTR(&engine_read_obj) },
     { MP_ROM_QSTR(MP_QSTR_drain), MP_ROM_PTR(&engine_drain_obj) },
     { MP_ROM_QSTR(MP_QSTR_call_back), MP_ROM_PTR(&engine_call_back_obj) },
     { MP_ROM_QSTR(MP_QSTR_nothing), MP_ROM_PTR(&engine_nothing_obj) },

@@ -136,6 +136,35 @@ void world_read_y_fixed(const world_fixed_t *w, float *out) {
     }
 }
 
+int32_t world_spawn_float(world_float_t *w, int32_t i, float x, float y, float vx, float vy, float rest_y) {
+    world_state_t *s = &w->s;
+    if (i < 0 || i >= WORLD_MAX_BODIES) {
+        return 0;
+    }
+    for (int32_t k = s->n; k < i; k++) {  // skipped over: at rest at 0, so a step moves none of them
+        w->x[k] = w->y[k] = w->vx[k] = w->vy[k] = w->rest_y[k] = 0.0f;
+        s->asleep[k] = 1;
+    }
+    if (i >= s->n) {
+        s->n = i + 1;
+    }
+    w->x[i] = x;
+    w->y[i] = y;
+    w->vx[i] = vx;
+    w->vy[i] = vy;
+    w->rest_y[i] = rest_y;
+    s->asleep[i] = 0;
+    return 1;
+}
+
+void world_read_float(const world_float_t *w, int16_t *out) {
+    for (int32_t i = 0; i < w->s.n; i++) {
+        out[3 * i] = (int16_t)w->x[i];
+        out[3 * i + 1] = (int16_t)w->y[i];
+        out[3 * i + 2] = w->s.asleep[i];
+    }
+}
+
 int32_t world_drain(const world_state_t *s, int32_t *out, int32_t n) {
     int32_t m = n < s->n_events ? n : s->n_events;
     for (int32_t k = 0; k < m; k++) {

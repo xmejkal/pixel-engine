@@ -8,7 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define WORLD_MAX_BODIES 64
+#define WORLD_MAX_BODIES 256  // 64 in P589; 256 for the rain (P593): 12,320 B of static RAM for the two worlds
 #define WORLD_MAX_EVENTS 64  // a step call keeps its first 64 events; the rest only count in dropped
 
 enum { WORLD_EVENT_HIT = 1, WORLD_EVENT_SLEEP = 2 };
@@ -52,6 +52,14 @@ void world_step_fixed(world_fixed_t *w, int32_t steps, int32_t rate, float gravi
 
 void world_read_y_float(const world_float_t *w, float *out);
 void world_read_y_fixed(const world_fixed_t *w, float *out);
+
+// Put body i in the float world at this state, awake (P593). n becomes i + 1 when i is at or past n, and the bodies
+// skipped over sleep at 0. Return 1, or 0 when i is under 0 or at or past WORLD_MAX_BODIES (nothing changes then).
+int32_t world_spawn_float(world_float_t *w, int32_t i, float x, float y, float vx, float vy, float rest_y);
+
+// Each body's x, y and asleep into out as 3 int16 (x and y truncated toward 0, and inside +-32,767 px), so Python
+// makes no float (P593).
+void world_read_float(const world_float_t *w, int16_t *out);
 
 // Copy up to n of the last step call's events into out as id, kind, speed (3 ints each); return how many.
 int32_t world_drain(const world_state_t *s, int32_t *out, int32_t n);
