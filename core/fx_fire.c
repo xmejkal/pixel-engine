@@ -76,8 +76,8 @@ void fx_fire_init(fx_fire_t *f, uint8_t *heat, uint8_t *cooling, int32_t w, int3
     f->heat = heat;
     f->cooling = cooling;
     f->rng = seed ? seed : 1;
-    f->scroll = 0;
-    f->fast_scroll = 0;
+    f->map_row = 0;
+    f->fast_map_row = 0;
     f->decay = 31;
     f->cool = 0;
     f->sway = 0;
@@ -199,8 +199,8 @@ void fx_fire_step(fx_fire_t *f, int32_t steps, int32_t wind) {
             const uint8_t *below = row + w;
             const uint8_t *below2 = y + 2 < h ? below + w : NULL;
             const uint8_t *below3 = y + 3 < h ? below2 + w : NULL;
-            const uint8_t *cooling = f->cooling + ((y + f->scroll) & (FX_FIRE_MAP_H - 1)) * FX_FIRE_MAP_W;
-            const uint8_t *fast = below2 ? f->cooling + ((y + f->fast_scroll) & (FX_FIRE_MAP_H - 1)) * FX_FIRE_MAP_W
+            const uint8_t *cooling = f->cooling + ((y + f->map_row) & (FX_FIRE_MAP_H - 1)) * FX_FIRE_MAP_W;
+            const uint8_t *fast = below2 ? f->cooling + ((y + f->fast_map_row) & (FX_FIRE_MAP_H - 1)) * FX_FIRE_MAP_W
                                          : NULL;
             uint32_t up = (uint32_t)(h - 1 - y);  // rows above the bottom
             uint32_t faded = (((up + 1) * fade) >> 4) - ((up * fade) >> 4);  // fade / 16 a row, in whole units
@@ -232,8 +232,8 @@ void fx_fire_step(fx_fire_t *f, int32_t steps, int32_t wind) {
             }
         }
         embers_step(f, wind);
-        f->scroll = (f->scroll + 1) & (FX_FIRE_MAP_H - 1);
-        f->fast_scroll = (f->fast_scroll + 2) & (FX_FIRE_MAP_H - 1);
+        f->map_row = (f->map_row + 1) & (FX_FIRE_MAP_H - 1);
+        f->fast_map_row = (f->fast_map_row + 2) & (FX_FIRE_MAP_H - 1);
     }
 }
 
@@ -348,6 +348,30 @@ void fx_fire_burn(fx_fire_t *f, int32_t x0, int32_t y0, int32_t x1, int32_t y1, 
                     row[x] = heat;
                 }
             }
+        }
+    }
+}
+
+// --- Later, not MVP: kept for other games, the PO 2026-11-04 (P602) ---
+void fx_fire_scroll(fx_fire_t *f, int32_t dx) {
+    int32_t w = f->w, h = f->h, n = dx < 0 ? -dx : dx;
+    if (n >= w) {
+        memset(f->heat, 0, (size_t)w * (size_t)h);
+    } else if (n > 0) {
+        for (int32_t y = 0; y < h; y++) {
+            uint8_t *row = f->heat + y * w;
+            if (dx < 0) {  // left: the cells at the right edge are uncovered
+                memmove(row, row + n, (size_t)(w - n));
+                memset(row + w - n, 0, (size_t)n);
+            } else {
+                memmove(row + n, row, (size_t)(w - n));
+                memset(row, 0, (size_t)n);
+            }
+        }
+    }
+    for (int32_t i = 0; i < FX_FIRE_MAX_EMBERS; i++) {  // an ember moved out of the field dies at the next step
+        if (f->ember_heat[i] != 0) {
+            f->ember_x[i] += dx * 256;
         }
     }
 }

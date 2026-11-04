@@ -256,6 +256,20 @@ static mp_obj_t heat_field_step(mp_obj_t self_in, mp_obj_t steps_in, mp_obj_t wi
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(heat_field_step_obj, heat_field_step);
 
+// --- Later, not MVP: kept for other games, the PO 2026-11-04 (P602) ---
+// scroll(dx): see fx_fire_scroll. The world moves under the screen by dx cells, negative to the left; -1024 to 1024,
+// as no field is wider than 1024.
+static mp_obj_t heat_field_scroll(mp_obj_t self_in, mp_obj_t dx_in) {
+    heat_field_obj_t *self = live(self_in);
+    mp_int_t dx = mp_obj_get_int(dx_in);
+    if (dx < -1024 || dx > 1024) {
+        mp_raise_ValueError(MP_ERROR_TEXT("dx is -1024 to 1024"));
+    }
+    fx_fire_scroll(&self->fire, (int32_t)dx);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(heat_field_scroll_obj, heat_field_scroll);
+
 // draw(tft, palette{, alpha}): the whole panel into an s3lcd ESPLCD's frame, all of it marked to send. palette is an
 // array('H') of 256. Without alpha, each pixel is palette[heat] (path B). With alpha, an array('B') of 256, each pixel
 // is blended over what the frame holds at alpha[heat]: the picture mode over the sky (P603). Path A, a buffer blitted
@@ -317,6 +331,7 @@ static const mp_rom_map_elem_t heat_field_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_set_base), MP_ROM_PTR(&heat_field_set_base_obj) },
     { MP_ROM_QSTR(MP_QSTR_set_filter), MP_ROM_PTR(&heat_field_set_filter_obj) },  // P608
     { MP_ROM_QSTR(MP_QSTR_burn), MP_ROM_PTR(&heat_field_burn_obj) },
+    { MP_ROM_QSTR(MP_QSTR_scroll), MP_ROM_PTR(&heat_field_scroll_obj) },  // P602
     { MP_ROM_QSTR(MP_QSTR_draw), MP_ROM_PTR(&heat_field_draw_obj) },
     { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&heat_field_del_obj) },
 };

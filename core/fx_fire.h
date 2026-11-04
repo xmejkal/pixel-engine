@@ -23,10 +23,10 @@
 typedef struct {
     int32_t w, h;
     uint8_t *heat;
-    uint8_t *cooling;  // tiled over the field, its row (y + scroll) & 31 under field row y
+    uint8_t *cooling;  // tiled over the field, its row (y + map_row) & 31 under field row y
     uint32_t rng;  // xorshift32 state, never 0
-    int32_t scroll;  // 0 to 31, one more each step, so the cold patches rise with the flames
-    int32_t fast_scroll;  // 0 to 31, two more each step: the map read again for the fast regions, which climb faster
+    int32_t map_row;  // 0 to 31, one more each step, so the cold patches rise with the flames
+    int32_t fast_map_row;  // 0 to 31, two more each step: the map read again for the fast regions, which climb faster
     int32_t decay, cool, sway, spots, spread, fast, embers, fade;  // the look, see fx_fire_set_look
     int32_t spot_x[FX_FIRE_MAX_SPOTS];  // each hot spot's column
     int32_t ember_x[FX_FIRE_MAX_EMBERS], ember_y[FX_FIRE_MAX_EMBERS];  // in 1/256 of a cell
@@ -44,7 +44,7 @@ void fx_fire_init(fx_fire_t *f, uint8_t *heat, uint8_t *cooling, int32_t w, int3
 // no cell grows hotter than the cells it reads. cool 0 to 255: how much the cooling map takes, 0 none. sway 0 or 1:
 // each cell reads the cells below it shifted by -1, 0 or +1 at random. spots 0 to FX_FIRE_MAX_SPOTS: the hot spots at
 // the base, 0 for a random bottom row. spread 1 to 64: a spot's half-width in cells. fast 0 to 255: a cell is fast
-// when the map's cell at column (x + 128) & 255, row (y + fast_scroll) & 31 is at least 256 - fast, so 0 makes none.
+// when the map's cell at column (x + 128) & 255, row (y + fast_map_row) & 31 is at least 256 - fast, so 0 makes none.
 // embers 0 to 255: an ember starts in embers of 256 steps, 0 none. fade 0 to 255: a loss every cell pays, fade
 // sixteenths of a heat unit a row on top of the map's, so no parcel keeps its heat forever. A change of the spot count
 // places the spots again.
@@ -89,5 +89,11 @@ void fx_fire_burn(fx_fire_t *f, int32_t x0, int32_t y0, int32_t x1, int32_t y1, 
 // neighbour past the field's edge is the edge cell (GL_CLAMP_TO_EDGE). The panel map stays: panel (px, py) shows game
 // pixel (2w - 1 - py, px). The blend leaves a pixel of alpha 0 as it is.
 void fx_fire_set_filter(fx_fire_t *f, int32_t filter);
+
+// --- Later, not MVP: kept for other games, the PO 2026-11-04 (P602) ---
+// The world moves under the screen by dx cells, -1024 to 1024 checked by the caller: every row shifts by dx (negative
+// is left, as a side-scroller's world moves), the cells it uncovers become 0, and |dx| >= w clears the field. Each
+// live ember moves by dx too. It takes no draw.
+void fx_fire_scroll(fx_fire_t *f, int32_t dx);
 
 #endif
