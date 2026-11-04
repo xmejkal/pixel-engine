@@ -17,6 +17,7 @@ DT, SUBSTEPS, GRAVITY, DAMPING, HIT_MIN = 0.01, 4, 2000.0, 0.98, 60.0  # balls.p
 PHYSICS = (SUBSTEPS, DT, GRAVITY, DAMPING, HIT_MIN)
 OVERLAP_PX = 1.5  # the pile's bar at a step boundary (the plan's round 2 simulation: 0.74 to 1.08 px at 4 substeps)
 REST_SPEED = 20.0  # px/s: the settled pile's mean speed stays under this
+MATERIAL = (0.5, 0.5, 100.0)  # balls.py's FRICTION, RESTITUTION, RESTITUTION_THRESHOLD
 POUR, MAX = 25, 300
 
 
@@ -41,9 +42,10 @@ def run(balls, steps):
     balls.step(steps % 64, *PHYSICS)
 
 
-def pile(seconds=4.0, pours=12):
+def pile(seconds=4.0, pours=12, material=(0.0, 0.0, 0.0)):
     """pours pours a second apart, then seconds of settling: the balls."""
     rng, balls = random.Random(598), CBalls(MAX)
+    balls.set_material(*material)
     for k in range(pours):
         pour(balls, rng, k % COLOURS)
         run(balls, 100)
@@ -121,7 +123,14 @@ class BallsCoreTest(unittest.TestCase):
     def test_a_60_s_pour_passes_no_ball_through_another_or_a_wall(self):
         """A7: 60 s at 2,000 px/s2, 12 pours to 300 balls, read after every substep: no touching pair swaps sides
         (its relative vector turns by more than 90 degrees in one substep), and no ball leaves the box."""
+        self.pour_60_s((0.0, 0.0, 0.0))
+
+    def test_a_60_s_pour_at_the_game_s_material_passes_no_ball_through_another_or_a_wall(self):
+        self.pour_60_s(MATERIAL)
+
+    def pour_60_s(self, material):
         rng, balls, rs, reach = random.Random(7), CBalls(MAX), [], 10.5  # reach: two touching centres, plus a margin
+        balls.set_material(*material)
         last = {}
         for k in range(60 * 100 * SUBSTEPS):
             if k % (5 * 100 * SUBSTEPS) == 0 and balls.count < MAX:
@@ -187,6 +196,10 @@ class BallsCoreTest(unittest.TestCase):
             balls.read(array("h", [0, 0]))
         with self.assertRaises(ValueError):
             balls.drain(array("h", [0]))
+        for bad in ((-0.1, 0.5, 100.0), (0.5, -0.1, 100.0), (0.5, 1.1, 100.0), (0.5, 0.5, -1.0)):
+            with self.assertRaises(ValueError):
+                balls.set_material(*bad)
+        balls.set_material(0.0, 1.0, 0.0)  # the edges hold
 
     def test_draw_fills_the_panel_and_paints_each_ball_at_its_mapped_place(self):
         """Game (x, y) is panel (y, PANEL_H - 1 - x), lcd.TftCanvas.fill's map at ORIENTATION 0."""
@@ -205,6 +218,85 @@ class BallsCoreTest(unittest.TestCase):
         self.assertEqual((0x00FF, 0x00FF, 0x00FF), (panel(104, 50), panel(100, 54), panel(0, 0)))
         self.assertEqual(0x00FF, panel(103, 53))  # the corner outside the disc
         self.assertEqual(palette[2], panel(102, 52))  # 2 * 2 + 2 * 2 = 8 <= 9 + 3: inside
+
+
+@unittest.skipUnless(HAVE_CLANG, "clang is missing: engine/core/fx_balls.c is not built")
+class MaterialTest(unittest.TestCase):
+    """The material (P598, the PO 2026-11-04: "the balls really don't bounce"): friction and restitution."""
+
+    def rise_after_landing(self, balls, i, steps=100):
+        """Step steps, and return how far ball i climbs back up after its lowest place, in px."""
+        lowest, rise = 0.0, 0.0
+        for _ in range(steps):
+            balls.step(1, *PHYSICS)
+            y = balls.xy()[1][i]
+            lowest, rise = max(lowest, y), max(rise, max(lowest, y) - y)
+        return rise
+
+    def test_a_ball_bounces_off_the_floor_and_a_slow_one_rests(self):
+        balls = CBalls(1)
+        balls.set_material(*MATERIAL)
+        balls.spawn(160.0, H - 4 - 40.0, 0.0, 0.0, 4, 1)  # 40 px up: it lands at about 350 px/s
+        self.assertTrue(5.0 <= self.rise_after_landing(balls, 0) <= 15.0)  # 0.5 x 350 px/s rises about 7 px
+        slow = CBalls(1)
+        slow.set_material(*MATERIAL)
+        slow.spawn(160.0, H - 4 - 1.0, 0.0, 0.0, 4, 1)  # 1 px up: about 60 px/s, under the 100 px/s threshold
+        self.assertLess(self.rise_after_landing(slow, 0), 0.05)
+        self.assertAlmostEqual(H - 4, slow.xy()[1][0], delta=0.05)
+
+    def test_a_ball_bounces_off_a_resting_ball_as_off_the_floor(self):
+        """Any radius on any radius: the upper ball leaves at restitution x its closing speed, within 20 %."""
+        for top, low in ((3, 5), (4, 4), (5, 3), (2, 5)):
+            balls = CBalls(2)
+            balls.set_material(*MATERIAL)
+            balls.spawn(160.0, H - low, 0.0, 0.0, low, 1)
+            for _ in range(20):
+                balls.step(1, *PHYSICS)
+            balls.spawn(160.0, H - 2 * low - top - 40.0, 0.0, 0.0, top, 2)
+            ys, closing = [balls.xy()[1][1]], None
+            for _ in range(60):
+                balls.step(1, *PHYSICS)
+                ys.append(balls.xy()[1][1])
+                closing = closing or next((speed for i, _, speed in events(balls) if i == 0), None)
+            leaving = max(a - b for a, b in zip(ys, ys[1:])) / DT
+            self.assertTrue(0.4 * closing <= leaving <= 0.6 * closing, (top, low, closing, leaving))
+
+    def test_friction_stops_a_sliding_ball(self):
+        slid = {}
+        for friction in (0.0, 0.5):
+            balls = CBalls(1)
+            balls.set_material(friction, 0.0, 0.0)
+            balls.spawn(100.0, H - 4.0, 300.0, 0.0, 4, 1)
+            for _ in range(100):  # 1 s
+                balls.step(1, *PHYSICS)
+            slid[friction] = balls.xy()[0][0] - 100.0
+        self.assertLess(slid[0.5], 60.0)  # 300^2 / (2 x 0.5 x 2,000) = 45 px, less the damping
+        self.assertGreater(slid[0.0], 120.0)  # the damping alone caps the slide at 150 px
+
+    def test_friction_piles_the_heap_taller(self):
+        """100 balls from a spout 6 px wide: 43 px high at friction 0.5, 22 at 0 (Mac run 2026-11-04)."""
+        high = {}
+        for friction in (0.0, 0.5):
+            rng, balls = random.Random(5), CBalls(100)
+            balls.set_material(friction, 0.0, 100.0)
+            for _ in range(100):
+                r = rng.randrange(2, 6)
+                balls.spawn(160.0 + rng.uniform(-3.0, 3.0), -r, 0.0, 0.0, r, 1)
+                run(balls, 5)
+            run(balls, 400)
+            ys, rs = balls.xy()[1], radii(balls)
+            high[friction] = H - min(y - r for y, r in zip(ys, rs))
+        self.assertGreater(high[0.5], 1.5 * high[0.0], high)
+
+    def test_the_settled_pile_at_the_game_s_material_rests(self):
+        balls = pile(material=MATERIAL)
+        self.assertLessEqual(worst_overlap(balls), OVERLAP_PX)
+        x0, y0 = balls.xy()
+        balls.step(1, *PHYSICS)
+        x1, y1 = balls.xy()
+        speed = sum(((a - b) ** 2 + (c - d) ** 2) ** 0.5 for a, b, c, d in zip(x1, x0, y1, y0)) / MAX / DT
+        self.assertLess(speed, REST_SPEED)
+        self.assertEqual([], events(balls))
 
 
 @unittest.skipUnless(HAVE_CLANG, "clang is missing: engine/core/grid.c is not built")

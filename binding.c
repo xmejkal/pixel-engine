@@ -481,6 +481,21 @@ static mp_obj_t balls_kick(mp_obj_t self_in, mp_obj_t vx_in, mp_obj_t vy_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(balls_kick_obj, balls_kick);
 
+// set_material(friction, restitution, restitution_threshold): see fx_balls_set_material (the PO 2026-11-04: "the balls
+// really don't bounce").
+static mp_obj_t balls_set_material(size_t n_args, const mp_obj_t *args) {
+    float v[3];
+    for (size_t k = 0; k < 3; k++) {
+        v[k] = (float)mp_obj_get_float(args[k + 1]);
+    }
+    if (!(v[0] >= 0.0f) || !(v[1] >= 0.0f && v[1] <= 1.0f) || !(v[2] >= 0.0f)) {  // a NaN fails each
+        mp_raise_ValueError(MP_ERROR_TEXT("friction is 0 or more, restitution 0 to 1, restitution_threshold 0 or more"));
+    }
+    fx_balls_set_material(balls_of(args[0]), v[0], v[1], v[2]);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(balls_set_material_obj, 4, 4, balls_set_material);
+
 // count: the balls spawned; dropped: the last step call's events past EVENTS_MAX. Every other name goes on to the
 // methods.
 static void balls_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
@@ -501,6 +516,7 @@ static const mp_rom_map_elem_t balls_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_draw), MP_ROM_PTR(&balls_draw_obj) },
     { MP_ROM_QSTR(MP_QSTR_clear), MP_ROM_PTR(&balls_clear_obj) },
     { MP_ROM_QSTR(MP_QSTR_kick), MP_ROM_PTR(&balls_kick_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_material), MP_ROM_PTR(&balls_set_material_obj) },
 };
 static MP_DEFINE_CONST_DICT(balls_locals, balls_locals_table);
 

@@ -107,6 +107,12 @@ class CBalls:
     def clear(self):
         self.lib.fx_balls_clear(self.block)
 
+    def set_material(self, friction, restitution, restitution_threshold):
+        if not (friction >= 0 and 0 <= restitution <= 1 and restitution_threshold >= 0):  # a NaN fails, as on the board
+            raise ValueError("friction is 0 or more, restitution 0 to 1, restitution_threshold 0 or more")
+        self.lib.fx_balls_set_material(self.block, *(ctypes.c_float(v) for v in (friction, restitution,
+                                                                                 restitution_threshold)))
+
     def kick(self, vx, vy):
         self.lib.fx_balls_kick(self.block, ctypes.c_float(vx), ctypes.c_float(vy))
 

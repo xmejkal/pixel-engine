@@ -237,6 +237,18 @@ static void bounce(fx_balls_t *b, const view_t *v) {
             float more = (vx[i] - vx[j]) * nx + (vy[i] - vy[j]) * ny + apart;  // > 0: they part slower than apart
             if (more > 0.0f) {
                 float si = share[v->r[i] - FX_BALLS_R_MIN][v->r[j] - FX_BALLS_R_MIN], sj = 1.0f - si;
+                // A ball at rest under the other is the ground: the pile under it would take its share back, as a
+                // solver that iterates every resting contact finds, and a split gave a ball landing on the pile a
+                // quarter of its bounce (r4 on r4 at restitution 0.5: 0.17 of its closing speed). This stand-in costs
+                // no second sweep of the grid.
+                float rest2 = b->restitution_threshold * b->restitution_threshold;
+                if (ny > 0.0f && vx[j] * vx[j] + vy[j] * vy[j] < rest2) {  // j under i (y grows down)
+                    si = 1.0f;
+                    sj = 0.0f;
+                } else if (ny < 0.0f && vx[i] * vx[i] + vy[i] * vy[i] < rest2) {
+                    si = 0.0f;
+                    sj = 1.0f;
+                }
                 vx[i] -= nx * more * si;
                 vy[i] -= ny * more * si;
                 vx[j] += nx * more * sj;
