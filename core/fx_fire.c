@@ -87,6 +87,7 @@ void fx_fire_init(fx_fire_t *f, uint8_t *heat, uint8_t *cooling, int32_t w, int3
     f->embers = 0;
     f->fade = 0;
     f->base = 1;
+    f->filter = FX_FIRE_NEAREST;  // P608
     memset(f->ember_heat, 0, sizeof f->ember_heat);
     memset(heat, 0, (size_t)w * (size_t)h);
     make_cooling(f);
@@ -236,8 +237,28 @@ void fx_fire_step(fx_fire_t *f, int32_t steps, int32_t wind) {
     }
 }
 
+// --- MVP (P608) ---
+// Game pixel (gx, gy)'s heat with LINEAR: see fx_fire_set_filter.
+static inline uint32_t linear_heat(const fx_fire_t *f, int32_t gx, int32_t gy) {
+    int32_t w = f->w, h = f->h, x = gx >> 1, y = gy >> 1;
+    int32_t nx = x + (gx & 1 ? 1 : -1), ny = y + (gy & 1 ? 1 : -1);  // the neighbours on the pixel's side
+    nx = nx < 0 ? 0 : nx >= w ? w - 1 : nx;  // clamped to the edge
+    ny = ny < 0 ? 0 : ny >= h ? h - 1 : ny;
+    const uint8_t *row = f->heat + y * w, *side = f->heat + ny * w;
+    return (9u * row[x] + 3u * row[nx] + 3u * side[x] + side[nx] + 8u) >> 4;
+}
+
 void fx_fire_draw(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette) {
     int32_t w = f->w, h = f->h, pw = 2 * h;
+    if (f->filter == FX_FIRE_LINEAR) {  // P608: the two panel rows of a cell differ, so no memcpy
+        for (int32_t py = 0; py < 2 * w; py++) {  // panel row py shows game column 2w - 1 - py
+            uint16_t *out = panel + py * pw;
+            for (int32_t px = 0; px < pw; px++) {
+                out[px] = palette[linear_heat(f, 2 * w - 1 - py, px)];
+            }
+        }
+        return;
+    }
     for (int32_t k = 0; k < w; k++) {  // panel rows 2k and 2k + 1 show field column w - 1 - k, top cell first
         const uint8_t *col = f->heat + (w - 1 - k);
         uint16_t *out = panel + 2 * k * pw;
@@ -253,6 +274,18 @@ void fx_fire_draw(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette) 
 // --- MVP (P603) ---
 void fx_fire_blend(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette, const uint8_t *alpha) {
     int32_t w = f->w, h = f->h, pw = 2 * h;
+    if (f->filter == FX_FIRE_LINEAR) {  // --- MVP (P608) --- each pixel's own heat, as fx_fire_draw's
+        for (int32_t py = 0; py < 2 * w; py++) {
+            uint16_t *out = panel + py * pw;
+            for (int32_t px = 0; px < pw; px++) {
+                uint32_t heat = linear_heat(f, 2 * w - 1 - py, px);
+                if (alpha[heat] != 0) {  // a pixel of alpha 0 keeps what it holds
+                    out[px] = alpha_blend_565(palette[heat], out[px], alpha[heat]);
+                }
+            }
+        }
+        return;
+    }
     for (int32_t k = 0; k < w; k++) {  // the map of fx_fire_draw: panel rows 2k and 2k + 1 show column w - 1 - k
         const uint8_t *col = f->heat + (w - 1 - k);
         uint16_t *out = panel + 2 * k * pw;
@@ -269,6 +302,11 @@ void fx_fire_blend(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette,
             p[pw + 1] = alpha_blend_565(c, p[pw + 1], a);
         }
     }
+}
+
+// --- MVP (P608) ---
+void fx_fire_set_filter(fx_fire_t *f, int32_t filter) {
+    f->filter = filter;
 }
 
 // --- MVP (P596) ---
