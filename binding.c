@@ -105,10 +105,10 @@ static mp_obj_t bodies_drain(mp_obj_t self_in, mp_obj_t out_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(bodies_drain_obj, bodies_drain);
 
-// dropped: the last step call's events past WORLD_MAX_EVENTS. Every other name goes on to the methods.
+// dropped: the last step call's events past EVENTS_MAX. Every other name goes on to the methods.
 static void bodies_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     if (attr == MP_QSTR_dropped && dest[0] == MP_OBJ_NULL) {
-        dest[0] = MP_OBJ_NEW_SMALL_INT(bodies_world(self_in)->dropped);
+        dest[0] = MP_OBJ_NEW_SMALL_INT(bodies_world(self_in)->events.dropped);
     } else {
         dest[1] = MP_OBJ_SENTINEL;
     }
@@ -354,8 +354,8 @@ static MP_DEFINE_CONST_FUN_OBJ_0(engine_largest_free_internal_obj, engine_larges
 static const mp_rom_map_elem_t engine_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_engine) },
     { MP_ROM_QSTR(MP_QSTR_Bodies), MP_ROM_PTR(&bodies_type) },
-    { MP_ROM_QSTR(MP_QSTR_HIT), MP_ROM_INT(WORLD_EVENT_HIT) },
-    { MP_ROM_QSTR(MP_QSTR_SLEEP), MP_ROM_INT(WORLD_EVENT_SLEEP) },
+    { MP_ROM_QSTR(MP_QSTR_HIT), MP_ROM_INT(EVENT_HIT) },
+    { MP_ROM_QSTR(MP_QSTR_SLEEP), MP_ROM_INT(EVENT_SLEEP) },
     { MP_ROM_QSTR(MP_QSTR_HeatField), MP_ROM_PTR(&heat_field_type) },
     { MP_ROM_QSTR(MP_QSTR_NEAREST), MP_ROM_INT(FX_FIRE_NEAREST) },  // P608: HeatField.set_filter's filters
     { MP_ROM_QSTR(MP_QSTR_LINEAR), MP_ROM_INT(FX_FIRE_LINEAR) },

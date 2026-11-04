@@ -13,7 +13,7 @@ import types
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORLD_C = os.path.join(REPO, "engine", "core", "world.c")
-HIT, SLEEP = 1, 2  # world.h's WORLD_EVENT_HIT and WORLD_EVENT_SLEEP
+HIT, SLEEP = 1, 2  # events.h's EVENT_HIT and EVENT_SLEEP
 MAX_BODIES, MAX_STEPS = 256, 64  # binding.c's limits on n and on steps per call
 HAVE_CLANG = shutil.which("clang") is not None
 
@@ -50,7 +50,7 @@ class CBodies:
 
     @property
     def dropped(self):
-        return ctypes.c_int32.from_buffer(self.world, 8).value  # world_t: int32 cap, n_events, dropped
+        return ctypes.c_int32.from_buffer(self.world, 8).value  # world_t: int32 cap, then events.h's n, dropped
 
     def spawn(self, i, x, y, vx, vy, rest_y):
         if not 0 <= i < self.n:

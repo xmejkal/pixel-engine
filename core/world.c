@@ -11,7 +11,7 @@
 #define REST_Y(w) (VY(w) + (w)->cap)
 #define ASLEEP(w) ((uint8_t *)(REST_Y(w) + (w)->cap))
 
-size_t world_bytes(int32_t cap) {  // cap is 1 to WORLD_MAX_BODIES: the binding checks it
+size_t world_bytes(int32_t cap) {  // cap is 1 to the binding's BODIES_MAX: it checks that
     return sizeof(world_t) + (5 * sizeof(float) + sizeof(uint8_t)) * (size_t)cap;
 }
 
@@ -34,23 +34,11 @@ int32_t world_spawn(world_t *w, int32_t i, float x, float y, float vx, float vy,
     return 1;
 }
 
-static void add_event(world_t *w, int32_t id, int32_t kind, int32_t speed) {
-    if (w->n_events == WORLD_MAX_EVENTS) {
-        w->dropped++;
-        return;
-    }
-    world_event_t *e = &w->events[w->n_events++];
-    e->id = id;
-    e->kind = kind;
-    e->speed = speed;
-}
-
 void world_step(world_t *w, int32_t steps, float dt, float gravity, float restitution, float friction) {
     float *x = X(w), *y = Y(w), *vx = VX(w), *vy = VY(w), *rest_y = REST_Y(w);
     uint8_t *asleep = ASLEEP(w);
     float rest_speed = 1.5f * gravity * dt;  // fall_bodies' rest speed
-    w->n_events = 0;
-    w->dropped = 0;
+    events_clear(&w->events);
     for (int32_t k = 0; k < steps; k++) {
         for (int32_t i = 0; i < w->cap; i++) {
             if (asleep[i]) {
@@ -66,9 +54,9 @@ void world_step(world_t *w, int32_t steps, float dt, float gravity, float restit
                     vy[i] = 0.0f;
                     vx[i] = 0.0f;
                     asleep[i] = 1;
-                    add_event(w, i, WORLD_EVENT_SLEEP, 0);
+                    events_add(&w->events, i, EVENT_SLEEP, 0);
                 } else {
-                    add_event(w, i, WORLD_EVENT_HIT, (int32_t)v);
+                    events_add(&w->events, i, EVENT_HIT, (int32_t)v);
                     vy[i] = -v * restitution;
                     vx[i] *= friction;
                 }
@@ -89,11 +77,5 @@ int32_t world_read(const world_t *w, int16_t *out) {
 }
 
 int32_t world_drain(const world_t *w, int32_t *out, int32_t room) {
-    int32_t m = room < w->n_events ? room : w->n_events;
-    for (int32_t k = 0; k < m; k++) {
-        out[3 * k] = w->events[k].id;
-        out[3 * k + 1] = w->events[k].kind;
-        out[3 * k + 2] = w->events[k].speed;
-    }
-    return m < 0 ? 0 : m;
+    return events_drain(&w->events, out, room);
 }
