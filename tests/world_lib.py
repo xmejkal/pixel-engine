@@ -1,21 +1,14 @@
-"""engine/core/world.c on the Mac (P590): clang builds it once into a temporary folder, and CBodies stands in for
-engine.Bodies (engine/binding.c) through ctypes, with the binding's checks, so a test refuses what the board refuses.
--ffp-contract=off keeps clang from fusing a multiply and an add, which the twin's Python maths never does.
---- MVP (P590) ---"""
+"""engine/core/world.c on the Mac (P590): clang_lib builds it once, and CBodies stands in for engine.Bodies
+(engine/binding.c) through ctypes, with the binding's checks, so a test refuses what the board refuses. The build takes
+no fused multiply-add (clang_lib.NO_FMA), which the twin's Python maths never does. --- MVP (P590) ---"""
 
-import atexit
 import ctypes
-import os
-import shutil
-import subprocess
-import tempfile
 import types
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-WORLD_C = os.path.join(REPO, "engine", "core", "world.c")
-HIT, SLEEP = 1, 2  # world.h's WORLD_EVENT_HIT and WORLD_EVENT_SLEEP
+from clang_lib import HAVE_CLANG, NO_FMA, STRICT, build, core  # noqa: F401  HAVE_CLANG: the tests' skip
+
+HIT, SLEEP = 1, 2  # events.h's EVENT_HIT and EVENT_SLEEP
 MAX_BODIES, MAX_STEPS = 256, 64  # binding.c's limits on n and on steps per call
-HAVE_CLANG = shutil.which("clang") is not None
 
 _lib = None
 
@@ -24,12 +17,7 @@ def lib():
     """The built library, built on the first call."""
     global _lib
     if _lib is None:
-        tmp = tempfile.mkdtemp()
-        atexit.register(shutil.rmtree, tmp, True)
-        lib_path = os.path.join(tmp, "libworld.so")
-        subprocess.run(["clang", "-std=c99", "-O2", "-ffp-contract=off", "-Wall", "-Wextra", "-Werror", "-shared",
-                        "-fPIC", "-o", lib_path, WORLD_C], check=True)
-        _lib = ctypes.CDLL(lib_path)
+        _lib = build(core("world"), STRICT + NO_FMA)
         _lib.world_bytes.restype = ctypes.c_size_t
         _lib.world_bytes.argtypes = [ctypes.c_int32]
         _lib.world_spawn.restype = ctypes.c_int32
@@ -50,7 +38,7 @@ class CBodies:
 
     @property
     def dropped(self):
-        return ctypes.c_int32.from_buffer(self.world, 8).value  # world_t: int32 cap, n_events, dropped
+        return ctypes.c_int32.from_buffer(self.world, 8).value  # world_t: int32 cap, then events.h's n, dropped
 
     def spawn(self, i, x, y, vx, vy, rest_y):
         if not 0 <= i < self.n:
