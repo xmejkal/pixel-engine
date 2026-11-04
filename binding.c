@@ -3,12 +3,15 @@
 // games/motion.py's Bodies, with the same API. --- MVP (P590) ---
 // The HeatField part is P595's and is kept (D8): the fire of engine/core/fx_fire.c as a native type, drawn into the
 // s3lcd frame, opaque or blended (P603). --- MVP (P595) ---
+// engine.Balls (P598) is the circle solver of engine/core/fx_balls.c as a native type: balls that fall, knock and pile
+// in a box, their hits as events, drawn into the s3lcd frame. --- MVP (P598) ---
 #include "py/runtime.h"
 
 #include "esp_heap_caps.h"
 #include "driver/gpio.h"
 #include "esp_lcd_panel_io.h"
 
+#include "fx_balls.h"
 #include "fx_fire.h"
 #include "s3lcd.h"
 #include "world.h"
@@ -345,6 +348,162 @@ static MP_DEFINE_CONST_OBJ_TYPE(
     attr, heat_field_attr,
     locals_dict, &heat_field_locals);
 
+// --- MVP (P598): engine.Balls ---
+
+#define BALLS_MAX 320  // n is 1 to 320: the pit's 300 and room
+#define BALLS_MAX_STEPS 64  // a frame takes at most 8 steps (StepClock's cap), so more than 64 is a mistake
+#define BALLS_MAX_SUBSTEPS 8
+
+typedef struct {
+    mp_obj_base_t base;
+    fx_balls_t balls;  // then its grid and arrays in the same block: fx_balls_bytes(cap) bytes from here
+} balls_obj_t;
+
+static const mp_obj_type_t balls_type;
+
+// Balls(n): room for n balls, none yet. The block lives on the GC heap as Bodies' does: the GC frees it with the
+// object, and it stores no pointer.
+static mp_obj_t balls_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    mp_arg_check_num(n_args, n_kw, 1, 1, false);
+    mp_int_t n = mp_obj_get_int(args[0]);
+    if (n < 1 || n > BALLS_MAX) {
+        mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("n is 1 to %d"), BALLS_MAX);
+    }
+    balls_obj_t *self = mp_obj_malloc_var(balls_obj_t, balls, uint8_t, fx_balls_bytes((int32_t)n), type);
+    fx_balls_init(&self->balls, (int32_t)n);
+    return MP_OBJ_FROM_PTR(self);
+}
+
+static fx_balls_t *balls_of(mp_obj_t self_in) {  // a Balls method called through its type with another object raises
+    if (!mp_obj_is_type(self_in, &balls_type)) {
+        mp_raise_TypeError(MP_ERROR_TEXT("a Balls is needed"));
+    }
+    return &((balls_obj_t *)MP_OBJ_TO_PTR(self_in))->balls;
+}
+
+// spawn(x, y, vx, vy, r, colour): one more ball; its id, or -1 when full. r is FX_BALLS_R_MIN to FX_BALLS_R_MAX,
+// colour 0 to FX_BALLS_COLOURS - 1.
+static mp_obj_t balls_spawn(size_t n_args, const mp_obj_t *args) {
+    fx_balls_t *b = balls_of(args[0]);
+    float v[4];
+    for (size_t k = 0; k < 4; k++) {
+        v[k] = (float)mp_obj_get_float(args[k + 1]);
+    }
+    mp_int_t r = mp_obj_get_int(args[5]), colour = mp_obj_get_int(args[6]);
+    if (r < FX_BALLS_R_MIN || r > FX_BALLS_R_MAX || colour < 0 || colour >= FX_BALLS_COLOURS) {
+        mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("r is %d to %d, colour 0 to %d"), FX_BALLS_R_MIN,
+            FX_BALLS_R_MAX, FX_BALLS_COLOURS - 1);
+    }
+    return MP_OBJ_NEW_SMALL_INT(fx_balls_spawn(b, v[0], v[1], v[2], v[3], (int32_t)r, (int32_t)colour));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(balls_spawn_obj, 7, 7, balls_spawn);
+
+// step(steps, substeps, dt, gravity, damping, hit_min): see fx_balls_step. It clears the events first, also for 0 steps.
+static mp_obj_t balls_step(size_t n_args, const mp_obj_t *args) {
+    fx_balls_t *b = balls_of(args[0]);
+    mp_int_t steps = mp_obj_get_int(args[1]), substeps = mp_obj_get_int(args[2]);
+    if (steps < 0 || steps > BALLS_MAX_STEPS || substeps < 1 || substeps > BALLS_MAX_SUBSTEPS) {
+        mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("steps is 0 to %d, substeps 1 to %d"), BALLS_MAX_STEPS,
+            BALLS_MAX_SUBSTEPS);
+    }
+    float v[4];
+    for (size_t k = 0; k < 4; k++) {
+        v[k] = (float)mp_obj_get_float(args[k + 3]);
+    }
+    fx_balls_step(b, (int32_t)steps, (int32_t)substeps, v[0], v[1], v[2], v[3]);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(balls_step_obj, 7, 7, balls_step);
+
+// read(out): each ball's x, y and r into an array('h') of at least 3n, as ints; returns the count.
+static mp_obj_t balls_read(mp_obj_t self_in, mp_obj_t out_in) {
+    fx_balls_t *b = balls_of(self_in);
+    mp_buffer_info_t info;
+    mp_get_buffer_raise(out_in, &info, MP_BUFFER_WRITE);
+    if (info.typecode != 'h' || info.len < (size_t)b->cap * 3 * sizeof(int16_t)) {
+        mp_raise_ValueError(MP_ERROR_TEXT("an array('h') of 3n ints is needed"));
+    }
+    return MP_OBJ_NEW_SMALL_INT(fx_balls_read(b, info.buf));
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(balls_read_obj, balls_read);
+
+// drain(out): up to len(out) // 3 of the last step call's events into an array('i') as id, kind, speed; how many.
+static mp_obj_t balls_drain(mp_obj_t self_in, mp_obj_t out_in) {
+    fx_balls_t *b = balls_of(self_in);
+    mp_buffer_info_t info;
+    mp_get_buffer_raise(out_in, &info, MP_BUFFER_WRITE);
+    if (info.typecode != 'i') {
+        mp_raise_ValueError(MP_ERROR_TEXT("an array('i') is needed"));
+    }
+    return MP_OBJ_NEW_SMALL_INT(fx_balls_drain(b, info.buf, (int32_t)(info.len / (3 * sizeof(int32_t)))));
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(balls_drain_obj, balls_drain);
+
+// draw(tft, palette, bg): the whole panel into an s3lcd ESPLCD's frame (heat_field_draw's checks), all of it marked
+// to send: bg everywhere, then each ball in palette[colour], an array('H') of FX_BALLS_COLOURS in the panel's byte
+// order, as bg is.
+static mp_obj_t balls_draw(size_t n_args, const mp_obj_t *args) {
+    fx_balls_t *b = balls_of(args[0]);
+    if (!mp_obj_is_type(args[1], &s3lcd_type)) {
+        mp_raise_TypeError(MP_ERROR_TEXT("an s3lcd display is needed"));
+    }
+    s3lcd_obj_t *tft = MP_OBJ_TO_PTR(args[1]);
+    if (tft->frame_buffer == NULL || tft->width != FX_BALLS_H || tft->height != FX_BALLS_W) {
+        mp_raise_ValueError(MP_ERROR_TEXT("the display is not 240 x 320, or not initialised"));
+    }
+    mp_buffer_info_t palette;
+    mp_get_buffer_raise(args[2], &palette, MP_BUFFER_READ);
+    if (palette.typecode != 'H' || palette.len < FX_BALLS_COLOURS * sizeof(uint16_t)) {
+        mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("an array('H') of %d colours is needed"),
+            FX_BALLS_COLOURS);
+    }
+    mp_int_t bg = mp_obj_get_int(args[3]);
+    if (bg < 0 || bg > 0xFFFF) {
+        mp_raise_ValueError(MP_ERROR_TEXT("bg is a 16-bit colour"));
+    }
+    fx_balls_draw(b, tft->frame_buffer, palette.buf, (uint16_t)bg);
+    frame_dirty_all(&tft->frame);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(balls_draw_obj, 4, 4, balls_draw);
+
+// clear(): no balls.
+static mp_obj_t balls_clear(mp_obj_t self_in) {
+    fx_balls_clear(balls_of(self_in));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(balls_clear_obj, balls_clear);
+
+// count: the balls spawned; dropped: the last step call's events past EVENTS_MAX. Every other name goes on to the
+// methods.
+static void balls_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+    if (attr == MP_QSTR_count && dest[0] == MP_OBJ_NULL) {
+        dest[0] = MP_OBJ_NEW_SMALL_INT(balls_of(self_in)->n);
+    } else if (attr == MP_QSTR_dropped && dest[0] == MP_OBJ_NULL) {
+        dest[0] = MP_OBJ_NEW_SMALL_INT(balls_of(self_in)->events.dropped);
+    } else {
+        dest[1] = MP_OBJ_SENTINEL;
+    }
+}
+
+static const mp_rom_map_elem_t balls_locals_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_spawn), MP_ROM_PTR(&balls_spawn_obj) },
+    { MP_ROM_QSTR(MP_QSTR_step), MP_ROM_PTR(&balls_step_obj) },
+    { MP_ROM_QSTR(MP_QSTR_read), MP_ROM_PTR(&balls_read_obj) },
+    { MP_ROM_QSTR(MP_QSTR_drain), MP_ROM_PTR(&balls_drain_obj) },
+    { MP_ROM_QSTR(MP_QSTR_draw), MP_ROM_PTR(&balls_draw_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clear), MP_ROM_PTR(&balls_clear_obj) },
+};
+static MP_DEFINE_CONST_DICT(balls_locals, balls_locals_table);
+
+static MP_DEFINE_CONST_OBJ_TYPE(
+    balls_type,
+    MP_QSTR_Balls,
+    MP_TYPE_FLAG_NONE,
+    make_new, balls_make_new,
+    attr, balls_attr,
+    locals_dict, &balls_locals);
+
 // largest_free_internal(): the largest free block of internal RAM in bytes (A9).
 static mp_obj_t engine_largest_free_internal(void) {
     return mp_obj_new_int_from_uint(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
@@ -357,6 +516,7 @@ static const mp_rom_map_elem_t engine_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_HIT), MP_ROM_INT(EVENT_HIT) },
     { MP_ROM_QSTR(MP_QSTR_SLEEP), MP_ROM_INT(EVENT_SLEEP) },
     { MP_ROM_QSTR(MP_QSTR_HeatField), MP_ROM_PTR(&heat_field_type) },
+    { MP_ROM_QSTR(MP_QSTR_Balls), MP_ROM_PTR(&balls_type) },  // P598
     { MP_ROM_QSTR(MP_QSTR_NEAREST), MP_ROM_INT(FX_FIRE_NEAREST) },  // P608: HeatField.set_filter's filters
     { MP_ROM_QSTR(MP_QSTR_LINEAR), MP_ROM_INT(FX_FIRE_LINEAR) },
     { MP_ROM_QSTR(MP_QSTR_largest_free_internal), MP_ROM_PTR(&engine_largest_free_internal_obj) },
