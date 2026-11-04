@@ -350,7 +350,7 @@ static MP_DEFINE_CONST_OBJ_TYPE(
 
 // --- MVP (P598): engine.Balls ---
 
-#define BALLS_MAX 320  // n is 1 to 320: the pit's 300 and room
+#define BALLS_MAX 2000  // n is 1 to 2,000, about 60 KB: more than fill the screen (the PO: "as many as I want")
 #define BALLS_MAX_STEPS 64  // a frame takes at most 8 steps (StepClock's cap), so more than 64 is a mistake
 #define BALLS_MAX_SUBSTEPS 8
 

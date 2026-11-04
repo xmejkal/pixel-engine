@@ -11,7 +11,7 @@ from array import array
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from balls_lib import COLOURS, H, HAVE_CLANG, HIT, PANEL_H, PANEL_W, W, CBalls, Grid  # noqa: E402
+from balls_lib import COLOURS, H, HAVE_CLANG, HIT, MAX_BALLS, PANEL_H, PANEL_W, W, CBalls, Grid  # noqa: E402
 
 DT, SUBSTEPS, GRAVITY, DAMPING, HIT_MIN = 0.01, 4, 2000.0, 0.98, 60.0  # balls.py's feel numbers (A7's gravity)
 PHYSICS = (SUBSTEPS, DT, GRAVITY, DAMPING, HIT_MIN)
@@ -174,7 +174,7 @@ class BallsCoreTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             CBalls(0)
         with self.assertRaises(ValueError):
-            CBalls(321)
+            CBalls(MAX_BALLS + 1)
         balls = CBalls(1)
         for bad in ((10.0, 10.0, 0.0, 0.0, 1, 0), (10.0, 10.0, 0.0, 0.0, 6, 0), (10.0, 10.0, 0.0, 0.0, 2, COLOURS)):
             with self.assertRaises(ValueError):

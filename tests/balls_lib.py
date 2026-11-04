@@ -8,7 +8,7 @@ import types
 from clang_lib import HAVE_CLANG, STRICT, build, core  # noqa: F401  HAVE_CLANG: the tests' skip
 
 HIT = 1  # events.h's EVENT_HIT
-MAX_BALLS, MAX_STEPS, MAX_SUBSTEPS = 320, 64, 8  # binding.c's limits on n, steps and substeps
+MAX_BALLS, MAX_STEPS, MAX_SUBSTEPS = 2000, 64, 8  # binding.c's limits on n, steps and substeps
 W, H = 320, 240  # fx_balls.h's box, FX_BALLS_W x FX_BALLS_H
 R_MIN, R_MAX, COLOURS = 2, 5, 16  # fx_balls.h's radii and palette size
 PANEL_W, PANEL_H = 240, 320  # the panel fx_balls_draw fills
