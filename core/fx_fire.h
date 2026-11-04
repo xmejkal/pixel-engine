@@ -60,4 +60,9 @@ void fx_fire_step(fx_fire_t *f, int32_t steps, int32_t wind);
 // ORIENTATION 0: panel (px, py) shows cell ((2w - 1 - py) / 2, px / 2). The palette is already in the panel's byte order.
 void fx_fire_draw(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette);
 
+// --- MVP (P603) ---
+// The same panel blended over what it holds (the picture mode, over the painted sky): each pixel becomes
+// alpha_blend_565(palette[heat], pixel, alpha[heat]) of s3lcd/src/blend565.h. A cell of alpha 0 leaves its pixels.
+void fx_fire_blend(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette, const uint8_t *alpha);
+
 #endif

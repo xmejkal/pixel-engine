@@ -2,7 +2,7 @@
 // probe589.py to time a C step, its events and a call back into Python. One float world and one fixed world, loaded
 // together. spawn and read (P593) are the rain demo's, on the float world only. --- probe, throwaway (P589) ---
 // The HeatField part is P595's and is kept (D8): the fire of engine/core/fx_fire.c as a native type, drawn into the
-// s3lcd frame or into a buffer. --- MVP (P595) ---
+// s3lcd frame, opaque or blended (P603). --- MVP (P595) ---
 #include "py/runtime.h"
 
 #include "esp_heap_caps.h"
@@ -232,38 +232,39 @@ static mp_obj_t heat_field_step(mp_obj_t self_in, mp_obj_t steps_in, mp_obj_t wi
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(heat_field_step_obj, heat_field_step);
 
-// draw(target, palette): the whole panel as palette[heat], palette an array('H') of 256. target is an s3lcd ESPLCD
-// (into its frame, all of it marked to send: path B) or a writable buffer of 2h x 2w pixels, which the picture mode
-// blends over the sky (path A blitted it opaque and was dropped, P595).
-static mp_obj_t heat_field_draw(mp_obj_t self_in, mp_obj_t target, mp_obj_t palette_in) {
-    heat_field_obj_t *self = live(self_in);
+// draw(tft, palette{, alpha}): the whole panel into an s3lcd ESPLCD's frame, all of it marked to send. palette is an
+// array('H') of 256. Without alpha, each pixel is palette[heat] (path B). With alpha, an array('B') of 256, each pixel
+// is blended over what the frame holds at alpha[heat]: the picture mode over the sky (P603). Path A, a buffer blitted
+// opaque, was dropped (P595), and the picture mode's buffer with it (P603).
+static mp_obj_t heat_field_draw(size_t n_args, const mp_obj_t *args) {
+    heat_field_obj_t *self = live(args[0]);
     int32_t pw = 2 * self->fire.h, ph = 2 * self->fire.w;
+    if (!mp_obj_is_type(args[1], &s3lcd_type)) {
+        mp_raise_TypeError(MP_ERROR_TEXT("an s3lcd display is needed"));
+    }
+    s3lcd_obj_t *tft = MP_OBJ_TO_PTR(args[1]);
+    if (tft->frame_buffer == NULL || tft->width != pw || tft->height != ph) {
+        mp_raise_ValueError(MP_ERROR_TEXT("the display is not 2h x 2w, or not initialised"));
+    }
     mp_buffer_info_t palette;
-    mp_get_buffer_raise(palette_in, &palette, MP_BUFFER_READ);
+    mp_get_buffer_raise(args[2], &palette, MP_BUFFER_READ);
     if (palette.typecode != 'H' || palette.len < 256 * sizeof(uint16_t)) {
         mp_raise_ValueError(MP_ERROR_TEXT("an array('H') of 256 colours is needed"));
     }
-    if (mp_obj_is_type(target, &s3lcd_type)) {
-        s3lcd_obj_t *tft = MP_OBJ_TO_PTR(target);
-        if (tft->frame_buffer == NULL || tft->width != pw || tft->height != ph) {
-            mp_raise_ValueError(MP_ERROR_TEXT("the display is not 2h x 2w, or not initialised"));
+    if (n_args > 3 && args[3] != mp_const_none) {
+        mp_buffer_info_t alpha;
+        mp_get_buffer_raise(args[3], &alpha, MP_BUFFER_READ);
+        if (alpha.typecode != 'B' || alpha.len < 256) {
+            mp_raise_ValueError(MP_ERROR_TEXT("an array('B') of 256 alphas is needed"));
         }
+        fx_fire_blend(&self->fire, tft->frame_buffer, palette.buf, alpha.buf);
+    } else {
         fx_fire_draw(&self->fire, tft->frame_buffer, palette.buf);
-        frame_dirty_all(&tft->frame);
-        return mp_const_none;
     }
-    mp_buffer_info_t out;
-    mp_get_buffer_raise(target, &out, MP_BUFFER_WRITE);
-    if (out.len < (size_t)pw * (size_t)ph * sizeof(uint16_t)) {
-        mp_raise_ValueError(MP_ERROR_TEXT("the buffer is smaller than 2h x 2w pixels"));
-    }
-    if ((uintptr_t)out.buf & 1) {
-        mp_raise_ValueError(MP_ERROR_TEXT("the buffer is not 2-byte aligned"));
-    }
-    fx_fire_draw(&self->fire, out.buf, palette.buf);
+    frame_dirty_all(&tft->frame);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_3(heat_field_draw_obj, heat_field_draw);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(heat_field_draw_obj, 3, 4, heat_field_draw);
 
 // __del__(): free the field once.
 static mp_obj_t heat_field_del(mp_obj_t self_in) {

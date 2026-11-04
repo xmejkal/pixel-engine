@@ -1,5 +1,6 @@
 // The fire (P595): see fx_fire.h. --- MVP (P595) ---
 #include "fx_fire.h"
+#include "blend565.h"  // s3lcd/src: the blend s3lcd uses, plain C (P603)
 
 #include <string.h>
 
@@ -243,5 +244,26 @@ void fx_fire_draw(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette) 
             out[2 * y + 1] = c;
         }
         memcpy(out + pw, out, (size_t)pw * sizeof(uint16_t));
+    }
+}
+
+// --- MVP (P603) ---
+void fx_fire_blend(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette, const uint8_t *alpha) {
+    int32_t w = f->w, h = f->h, pw = 2 * h;
+    for (int32_t k = 0; k < w; k++) {  // the map of fx_fire_draw: panel rows 2k and 2k + 1 show column w - 1 - k
+        const uint8_t *col = f->heat + (w - 1 - k);
+        uint16_t *out = panel + 2 * k * pw;
+        for (int32_t y = 0; y < h; y++, col += w) {
+            uint8_t a = alpha[*col];
+            if (a == 0) {
+                continue;  // the four pixels keep what they hold
+            }
+            uint16_t c = palette[*col], *p = out + 2 * y;
+            // each pixel over its own background: row 2k + 1 is no copy of row 2k, unlike fx_fire_draw's memcpy
+            p[0] = alpha_blend_565(c, p[0], a);
+            p[1] = alpha_blend_565(c, p[1], a);
+            p[pw] = alpha_blend_565(c, p[pw], a);
+            p[pw + 1] = alpha_blend_565(c, p[pw + 1], a);
+        }
     }
 }
