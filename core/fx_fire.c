@@ -87,6 +87,7 @@ void fx_fire_init(fx_fire_t *f, uint8_t *heat, uint8_t *cooling, int32_t w, int3
     f->embers = 0;
     f->fade = 0;
     f->base = 1;
+    f->filter = FX_FIRE_NEAREST;  // P608
     memset(f->ember_heat, 0, sizeof f->ember_heat);
     memset(heat, 0, (size_t)w * (size_t)h);
     make_cooling(f);
@@ -236,8 +237,36 @@ void fx_fire_step(fx_fire_t *f, int32_t steps, int32_t wind) {
     }
 }
 
+// --- MVP (P608) ---
+// LINEAR down panel row py (see fx_fire_set_filter). The row shows game column gx = 2w - 1 - py, which mixes its cell
+// column x = gx / 2 3:1 with the neighbour column on its side, m = 3a + b, once a cell. A cell's two pixels then mix
+// its m 3:1 with the m above or below: (3m + m' + 8) >> 4 is (9a + 3b + 3c + d + 8) >> 4. Both clamp to the edge. Sets
+// col and side to the two columns' top cells.
+static inline void linear_columns(const fx_fire_t *f, int32_t py, const uint8_t **col, const uint8_t **side) {
+    int32_t w = f->w, gx = 2 * w - 1 - py, x = gx >> 1, nx = x + (gx & 1 ? 1 : -1);
+    nx = nx < 0 ? 0 : nx >= w ? w - 1 : nx;
+    *col = f->heat + x;
+    *side = f->heat + nx;
+}
+
 void fx_fire_draw(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette) {
     int32_t w = f->w, h = f->h, pw = 2 * h;
+    if (f->filter == FX_FIRE_LINEAR) {  // P608: the two panel rows of a cell differ, so no memcpy
+        for (int32_t py = 0; py < 2 * w; py++) {
+            const uint8_t *col, *side;
+            linear_columns(f, py, &col, &side);
+            uint16_t *out = panel + py * pw;
+            uint32_t m = 3u * col[0] + side[0], up = m;  // above the top cell: the top cell
+            for (int32_t y = 0; y < h; y++, col += w, side += w) {
+                uint32_t down = y + 1 < h ? 3u * col[w] + side[w] : m;
+                out[2 * y] = palette[(3u * m + up + 8u) >> 4];
+                out[2 * y + 1] = palette[(3u * m + down + 8u) >> 4];
+                up = m;
+                m = down;
+            }
+        }
+        return;
+    }
     for (int32_t k = 0; k < w; k++) {  // panel rows 2k and 2k + 1 show field column w - 1 - k, top cell first
         const uint8_t *col = f->heat + (w - 1 - k);
         uint16_t *out = panel + 2 * k * pw;
@@ -253,6 +282,27 @@ void fx_fire_draw(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette) 
 // --- MVP (P603) ---
 void fx_fire_blend(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette, const uint8_t *alpha) {
     int32_t w = f->w, h = f->h, pw = 2 * h;
+    if (f->filter == FX_FIRE_LINEAR) {  // --- MVP (P608) --- the heats of fx_fire_draw's LINEAR, each pixel blended
+        for (int32_t py = 0; py < 2 * w; py++) {
+            const uint8_t *col, *side;
+            linear_columns(f, py, &col, &side);
+            uint16_t *out = panel + py * pw;
+            uint32_t m = 3u * col[0] + side[0], up = m;
+            for (int32_t y = 0; y < h; y++, col += w, side += w) {
+                uint32_t down = y + 1 < h ? 3u * col[w] + side[w] : m;
+                uint32_t h0 = (3u * m + up + 8u) >> 4, h1 = (3u * m + down + 8u) >> 4;
+                if (alpha[h0] != 0) {  // a pixel of alpha 0 keeps what it holds, and skips the blend's cost
+                    out[2 * y] = alpha_blend_565(palette[h0], out[2 * y], alpha[h0]);
+                }
+                if (alpha[h1] != 0) {
+                    out[2 * y + 1] = alpha_blend_565(palette[h1], out[2 * y + 1], alpha[h1]);
+                }
+                up = m;
+                m = down;
+            }
+        }
+        return;
+    }
     for (int32_t k = 0; k < w; k++) {  // the map of fx_fire_draw: panel rows 2k and 2k + 1 show column w - 1 - k
         const uint8_t *col = f->heat + (w - 1 - k);
         uint16_t *out = panel + 2 * k * pw;
@@ -269,6 +319,11 @@ void fx_fire_blend(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette,
             p[pw + 1] = alpha_blend_565(c, p[pw + 1], a);
         }
     }
+}
+
+// --- MVP (P608) ---
+void fx_fire_set_filter(fx_fire_t *f, int32_t filter) {
+    f->filter = filter;
 }
 
 // --- MVP (P596) ---

@@ -13,6 +13,10 @@
 // The cooling map's width and height, each a power of 2. 256 wide, so it never repeats across a field up to 256 wide
 #define FX_FIRE_MAP_W 256
 #define FX_FIRE_MAP_H 32
+// --- MVP (P608) ---
+// How fx_fire_draw and fx_fire_blend magnify a cell to its 2 x 2 px: OpenGL's GL_NEAREST and GL_LINEAR filters
+#define FX_FIRE_NEAREST 0
+#define FX_FIRE_LINEAR 1
 
 // The caller owns heat (w x h bytes, row-major in game orientation, row h - 1 at the bottom) and cooling
 // (FX_FIRE_MAP_W x FX_FIRE_MAP_H bytes, row-major). No static state.
@@ -29,10 +33,11 @@ typedef struct {
     int32_t ember_vx[FX_FIRE_MAX_EMBERS], ember_vy[FX_FIRE_MAX_EMBERS];  // in 1/256 of a cell a step
     int32_t ember_heat[FX_FIRE_MAX_EMBERS];  // 0 is a free slot
     int32_t base;  // 1: the step makes the bottom row; 0: it clears it (P596)
+    int32_t filter;  // FX_FIRE_NEAREST or FX_FIRE_LINEAR, see fx_fire_set_filter (P608)
 } fx_fire_t;
 
 // Zero the field, seed the random numbers (a seed of 0 becomes 1), make the cooling map and place the spots. The look
-// starts as part 1's: decay 31, cool 0, sway 0, spots 0, fast 0, embers 0, fade 0.
+// starts as part 1's: decay 31, cool 0, sway 0, spots 0, fast 0, embers 0, fade 0. The filter starts as NEAREST.
 void fx_fire_init(fx_fire_t *f, uint8_t *heat, uint8_t *cooling, int32_t w, int32_t h, uint32_t seed);
 
 // The look, each number checked by the caller. decay 0 to 255: 32 keeps the heat, less cools it, more spreads it but
@@ -75,5 +80,14 @@ void fx_fire_set_base(fx_fire_t *f, int32_t on);
 // cell within r (dx * dx + dy * dy <= r * r) and inside the field keeps the larger of its heat and heat. The ends
 // may lie outside the field.
 void fx_fire_burn(fx_fire_t *f, int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t r, uint8_t heat);
+
+// --- MVP (P608) ---
+// filter FX_FIRE_NEAREST (init's) or FX_FIRE_LINEAR, checked by the caller. NEAREST paints each cell as its 2 x 2 px.
+// LINEAR paints them with bilinear filtering, GL_LINEAR's weights at 2x: game pixel (2x + i, 2y + j), i and j 0 or 1,
+// sits a quarter cell from cell (x, y)'s centre toward cell (x + 2i - 1, y + 2j - 1), so its heat is
+// (9a + 3b + 3c + d + 8) >> 4, with a its own cell, b and c the side neighbours toward it and d the diagonal one. A
+// neighbour past the field's edge is the edge cell (GL_CLAMP_TO_EDGE). The panel map stays: panel (px, py) shows game
+// pixel (2w - 1 - py, px). The blend leaves a pixel of alpha 0 as it is.
+void fx_fire_set_filter(fx_fire_t *f, int32_t filter);
 
 #endif

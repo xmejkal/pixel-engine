@@ -211,6 +211,19 @@ static mp_obj_t heat_field_set_base(mp_obj_t self_in, mp_obj_t on_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(heat_field_set_base_obj, heat_field_set_base);
 
+// --- MVP (P608) ---
+// set_filter(filter): see fx_fire_set_filter. filter is engine.NEAREST or engine.LINEAR.
+static mp_obj_t heat_field_set_filter(mp_obj_t self_in, mp_obj_t filter_in) {
+    heat_field_obj_t *self = live(self_in);
+    mp_int_t filter = mp_obj_get_int(filter_in);
+    if (filter != FX_FIRE_NEAREST && filter != FX_FIRE_LINEAR) {
+        mp_raise_ValueError(MP_ERROR_TEXT("filter is engine.NEAREST or engine.LINEAR"));
+    }
+    fx_fire_set_filter(&self->fire, (int32_t)filter);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(heat_field_set_filter_obj, heat_field_set_filter);
+
 // burn(x0, y0, x1, y1, r, heat): see fx_fire_burn, in cells. The ends may lie off the field by up to a field's size
 // (a body above the screen), r is 0 to 16 and heat 0 to 255.
 static mp_obj_t heat_field_burn(size_t n_args, const mp_obj_t *args) {
@@ -302,6 +315,7 @@ static const mp_rom_map_elem_t heat_field_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_set_look), MP_ROM_PTR(&heat_field_set_look_obj) },
     { MP_ROM_QSTR(MP_QSTR_step), MP_ROM_PTR(&heat_field_step_obj) },
     { MP_ROM_QSTR(MP_QSTR_set_base), MP_ROM_PTR(&heat_field_set_base_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_filter), MP_ROM_PTR(&heat_field_set_filter_obj) },  // P608
     { MP_ROM_QSTR(MP_QSTR_burn), MP_ROM_PTR(&heat_field_burn_obj) },
     { MP_ROM_QSTR(MP_QSTR_draw), MP_ROM_PTR(&heat_field_draw_obj) },
     { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&heat_field_del_obj) },
@@ -328,6 +342,8 @@ static const mp_rom_map_elem_t engine_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_HIT), MP_ROM_INT(WORLD_EVENT_HIT) },
     { MP_ROM_QSTR(MP_QSTR_SLEEP), MP_ROM_INT(WORLD_EVENT_SLEEP) },
     { MP_ROM_QSTR(MP_QSTR_HeatField), MP_ROM_PTR(&heat_field_type) },
+    { MP_ROM_QSTR(MP_QSTR_NEAREST), MP_ROM_INT(FX_FIRE_NEAREST) },  // P608: HeatField.set_filter's filters
+    { MP_ROM_QSTR(MP_QSTR_LINEAR), MP_ROM_INT(FX_FIRE_LINEAR) },
     { MP_ROM_QSTR(MP_QSTR_largest_free_internal), MP_ROM_PTR(&engine_largest_free_internal_obj) },
 };
 static MP_DEFINE_CONST_DICT(engine_module_globals, engine_module_globals_table);
