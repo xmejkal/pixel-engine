@@ -47,6 +47,11 @@ int32_t fx_balls_spawn(fx_balls_t *b, float x, float y, float vx, float vy, int3
 // No balls: n back to 0.
 void fx_balls_clear(fx_balls_t *b);
 
+// --- MVP (P598): the pit's shake, the PO 2026-11-04 ---
+// Every ball's velocity plus (vx, vy) px/s, as if the box were bumped. The move cap of a substep still holds, so a ball
+// leaves at most FX_BALLS_MOVE_MAX px a substep.
+void fx_balls_kick(fx_balls_t *b, float vx, float vy);
+
 // Clear the events, then steps steps of dt s, each in substeps substeps of dt / substeps. A substep: each ball's
 // velocity gains gravity * dt and its place moves by it (the velocity now is the one every hit speed reads); the grid
 // is built; FX_BALLS_PASSES passes each push every overlapping pair apart along its normal, the lighter ball further

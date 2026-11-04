@@ -107,6 +107,9 @@ class CBalls:
     def clear(self):
         self.lib.fx_balls_clear(self.block)
 
+    def kick(self, vx, vy):
+        self.lib.fx_balls_kick(self.block, ctypes.c_float(vx), ctypes.c_float(vy))
+
     def xy(self):
         """Each ball's x and y as the float32 the kernel holds: the floats follow the struct and the grid block, x
         first, then y."""

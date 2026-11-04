@@ -2,7 +2,6 @@
 #include "fx_balls.h"
 #include "grid.h"
 
-#include <math.h>
 #include <string.h>
 
 // The blocks after the struct, found from cap at each call: the grid first, so the floats stay aligned.
@@ -66,6 +65,35 @@ void fx_balls_clear(fx_balls_t *b) {
     b->n = 0;
 }
 
+void fx_balls_kick(fx_balls_t *b, float vx, float vy) {
+    float *bvx = VX(b), *bvy = VY(b);
+    for (int32_t i = 0; i < b->n; i++) {
+        bvx[i] += vx;
+        bvy[i] += vy;
+    }
+}
+
+// 1 / sqrt(x) with no division and no sqrtf, both library calls on the S3: a full pile paid one sqrtf and four
+// __divsf3 per touching pair in each pass (run99: 100 resting balls, 23 ms a frame). The method is the fast inverse
+// square root (Lomont, "Fast Inverse Square Root", 2003, his constant 0x5f375a86), with two Newton steps, so its
+// relative error is under 1e-5. Written from the formula, no code copied (D14).
+static float inv_sqrt(float x) {
+    union {
+        float f;
+        uint32_t u;
+    } c = {x};
+    c.u = 0x5f375a86u - (c.u >> 1);
+    float y = c.f;
+    y = y * (1.5f - 0.5f * x * y * y);
+    return y * (1.5f - 0.5f * x * y * y);
+}
+
+// The part of a push that ball i takes from a pair with ball j, by their radii: rj^2 / (ri^2 + rj^2), the lighter
+// ball moves further. Constants, so a contact divides nothing.
+#define SHARE(a, b) ((float)((b) * (b)) / (float)((a) * (a) + (b) * (b)))
+#define SHARE_ROW(a) {SHARE(a, 2), SHARE(a, 3), SHARE(a, 4), SHARE(a, 5)}
+static const float share[4][4] = {SHARE_ROW(2), SHARE_ROW(3), SHARE_ROW(4), SHARE_ROW(5)};  // [ri - 2][rj - 2]
+
 // Push balls i and j apart when they overlap; in the first pass, a hit when they close at hit_min or more.
 static void contact(fx_balls_t *b, const view_t *v, int32_t i, int32_t j, int32_t pass, float hit_min) {
     float *x = v->x, *y = v->y;
@@ -75,13 +103,15 @@ static void contact(fx_balls_t *b, const view_t *v, int32_t i, int32_t j, int32_
     if (d2 >= rr * rr) {
         return;
     }
-    float d = sqrtf(d2), nx = 0.0f, ny = -1.0f;  // the normal from i to j; (0, -1) for two centres in one place
-    if (d >= 1e-3f) {
-        nx = dx / d;
-        ny = dy / d;
+    float d = 0.0f, nx = 0.0f, ny = -1.0f;  // the normal from i to j; (0, -1) for two centres in one place
+    if (d2 >= 1e-6f) {  // d >= 1e-3 px
+        float inv = inv_sqrt(d2);
+        d = d2 * inv;
+        nx = dx * inv;
+        ny = dy * inv;
     }
-    float mi = (float)(r[i] * r[i]), mj = (float)(r[j] * r[j]), push = rr - d;
-    float wi = push * mj / (mi + mj), wj = push * mi / (mi + mj);  // the lighter ball moves further
+    float push = rr - d;
+    float wi = push * share[r[i] - FX_BALLS_R_MIN][r[j] - FX_BALLS_R_MIN], wj = push - wi;
     x[i] -= nx * wi;
     y[i] -= ny * wi;
     x[j] += nx * wj;
@@ -152,7 +182,7 @@ static void substep(fx_balls_t *b, float dt, float gravity, float damping, float
     for (int32_t i = 0; i < n; i++) {
         float mx = x[i] - px[i], my = y[i] - py[i], m2 = mx * mx + my * my;
         if (m2 > FX_BALLS_MOVE_MAX * FX_BALLS_MOVE_MAX) {
-            float s = FX_BALLS_MOVE_MAX / sqrtf(m2);
+            float s = FX_BALLS_MOVE_MAX * inv_sqrt(m2);
             mx *= s;
             my *= s;
             x[i] = px[i] + mx;

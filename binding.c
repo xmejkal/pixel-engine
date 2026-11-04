@@ -474,6 +474,13 @@ static mp_obj_t balls_clear(mp_obj_t self_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(balls_clear_obj, balls_clear);
 
+// kick(vx, vy): see fx_balls_kick, the pit's shake (the PO 2026-11-04).
+static mp_obj_t balls_kick(mp_obj_t self_in, mp_obj_t vx_in, mp_obj_t vy_in) {
+    fx_balls_kick(balls_of(self_in), mp_obj_get_float(vx_in), mp_obj_get_float(vy_in));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(balls_kick_obj, balls_kick);
+
 // count: the balls spawned; dropped: the last step call's events past EVENTS_MAX. Every other name goes on to the
 // methods.
 static void balls_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
@@ -493,6 +500,7 @@ static const mp_rom_map_elem_t balls_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_drain), MP_ROM_PTR(&balls_drain_obj) },
     { MP_ROM_QSTR(MP_QSTR_draw), MP_ROM_PTR(&balls_draw_obj) },
     { MP_ROM_QSTR(MP_QSTR_clear), MP_ROM_PTR(&balls_clear_obj) },
+    { MP_ROM_QSTR(MP_QSTR_kick), MP_ROM_PTR(&balls_kick_obj) },
 };
 static MP_DEFINE_CONST_DICT(balls_locals, balls_locals_table);
 

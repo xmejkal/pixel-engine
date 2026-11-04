@@ -89,6 +89,21 @@ class BallsCoreTest(unittest.TestCase):
         self.assertTrue(hits and all(kind == HIT and speed >= HIT_MIN for _, kind, speed in hits), hits)
         self.assertEqual(0, hits[0][0])
 
+    def test_a_kick_throws_a_resting_ball_up_and_it_falls_back(self):
+        balls = CBalls(4)
+        balls.spawn(160.0, H - 4.0, 0.0, 0.0, 4, 1)
+        for _ in range(20):
+            balls.step(1, *PHYSICS)
+        balls.kick(100.0, -400.0)  # px/s: a bump up and to the right, as the pit's shake
+        highest = H
+        for _ in range(100):  # 1 s
+            balls.step(1, *PHYSICS)
+            xs, ys = balls.xy()
+            highest = min(highest, ys[0])
+        self.assertLess(highest, H - 4 - 20)  # 400 px/s under 2,000 px/s2 rises about 40 px, less the damping
+        self.assertGreater(xs[0], 165.0)
+        self.assertAlmostEqual(H - 4, ys[0], delta=0.05)
+
     def test_the_settled_pile_overlaps_under_the_bar_and_rests(self):
         balls = pile()
         self.assertEqual(MAX, balls.count)
