@@ -256,7 +256,7 @@ static mp_obj_t heat_field_step(mp_obj_t self_in, mp_obj_t steps_in, mp_obj_t wi
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(heat_field_step_obj, heat_field_step);
 
-// --- MVP (P602) ---
+// --- Later, not MVP: kept for other games, the PO 2026-11-04 (P602) ---
 // scroll(dx): see fx_fire_scroll. The world moves under the screen by dx cells, negative to the left; -1024 to 1024,
 // as no field is wider than 1024.
 static mp_obj_t heat_field_scroll(mp_obj_t self_in, mp_obj_t dx_in) {

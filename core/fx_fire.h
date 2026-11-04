@@ -90,10 +90,10 @@ void fx_fire_burn(fx_fire_t *f, int32_t x0, int32_t y0, int32_t x1, int32_t y1, 
 // pixel (2w - 1 - py, px). The blend leaves a pixel of alpha 0 as it is.
 void fx_fire_set_filter(fx_fire_t *f, int32_t filter);
 
-// --- MVP (P602) ---
+// --- Later, not MVP: kept for other games, the PO 2026-11-04 (P602) ---
 // The world moves under the screen by dx cells, -1024 to 1024 checked by the caller: every row shifts by dx (negative
-// is left, as the pipes move), the cells it uncovers become 0, and |dx| >= w clears the field. Each live ember moves
-// by dx too. It takes no draw.
+// is left, as a side-scroller's world moves), the cells it uncovers become 0, and |dx| >= w clears the field. Each
+// live ember moves by dx too. It takes no draw.
 void fx_fire_scroll(fx_fire_t *f, int32_t dx);
 
 #endif

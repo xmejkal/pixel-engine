@@ -352,7 +352,7 @@ void fx_fire_burn(fx_fire_t *f, int32_t x0, int32_t y0, int32_t x1, int32_t y1, 
     }
 }
 
-// --- MVP (P602) ---
+// --- Later, not MVP: kept for other games, the PO 2026-11-04 (P602) ---
 void fx_fire_scroll(fx_fire_t *f, int32_t dx) {
     int32_t w = f->w, h = f->h, n = dx < 0 ? -dx : dx;
     if (n >= w) {
