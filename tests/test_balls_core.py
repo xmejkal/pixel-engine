@@ -225,6 +225,15 @@ class BallsCoreTest(unittest.TestCase):
         self.assertEqual(palette[2], panel(102, 52))  # 2 * 2 + 2 * 2 = 8 <= 9 + 3: inside
 
 
+def free_velocity(balls):
+    """Each ball's velocity, from its move over one substep with no gravity and no damping: (vxs, vys)."""
+    h = DT / SUBSTEPS
+    x0, y0 = balls.xy()
+    balls.step(1, 1, h, 0.0, 1.0, HIT_MIN)
+    x1, y1 = balls.xy()
+    return [(b - a) / h for a, b in zip(x0, x1)], [(b - a) / h for a, b in zip(y0, y1)]
+
+
 @unittest.skipUnless(HAVE_CLANG, "clang is missing: engine/core/fx_balls.c is not built")
 class MaterialTest(unittest.TestCase):
     """The material (P598, the PO 2026-11-04: "the balls really don't bounce"): friction and restitution."""
@@ -253,20 +262,69 @@ class MaterialTest(unittest.TestCase):
         """Any radius on any radius: the upper ball leaves at restitution x its closing speed, within 20 %."""
         restitution = MATERIAL[1]
         for top, low in ((3, 5), (4, 4), (5, 3), (2, 5)):
-            balls = CBalls(2)
-            balls.set_material(*MATERIAL)
-            balls.spawn(160.0, H - low, 0.0, 0.0, low, 1)
-            for _ in range(20):
-                balls.step(1, *PHYSICS)
-            balls.spawn(160.0, H - 2 * low - top - 40.0, 0.0, 0.0, top, 2)
-            ys, closing = [balls.xy()[1][1]], None
-            for _ in range(60):
-                balls.step(1, *PHYSICS)
-                ys.append(balls.xy()[1][1])
-                closing = closing or next((speed for i, _, speed in events(balls) if i == 0), None)
-            leaving = max(a - b for a, b in zip(ys, ys[1:])) / DT
-            self.assertTrue(0.8 * restitution * closing <= leaving <= 1.2 * restitution * closing,
-                            (top, low, closing, leaving))
+            for top_first in (False, True):  # the resting ball is j, then i, of the pair: both branches of the ground
+                balls = CBalls(2)
+                balls.set_material(*MATERIAL)
+                spawns = [(160.0, H - low, 0.0, 0.0, low, 1), (160.0, H - 2 * low - top - 40.0, 0.0, 0.0, top, 2)]
+                for args in reversed(spawns) if top_first else spawns:
+                    balls.spawn(*args)
+                k = 0 if top_first else 1  # the upper ball's index
+                ys, closing = [balls.xy()[1][k]], None
+                for _ in range(60):
+                    balls.step(1, *PHYSICS)
+                    ys.append(balls.xy()[1][k])
+                    closing = closing or next((speed for i, _, speed in events(balls) if i == 0), None)
+                leaving = max(a - b for a, b in zip(ys, ys[1:])) / DT
+                self.assertTrue(0.8 * restitution * closing <= leaving <= 1.2 * restitution * closing,
+                                (top, low, top_first, closing, leaving))
+
+    def test_a_slow_touch_between_balls_bounces_not(self):
+        balls = CBalls(2)
+        balls.set_material(*MATERIAL)
+        balls.spawn(160.0, H - 4.0, 0.0, 0.0, 4, 1)
+        balls.spawn(160.0, H - 12.0 - 1.0, 0.0, 0.0, 4, 2)  # 1 px over the lower ball: about 60 px/s, under 100
+        self.assertLess(self.rise_after_landing(balls, 1, 60), 0.05)
+
+    def test_a_slanted_hit_on_a_resting_ball_splits_the_bounce_and_keeps_the_momentum(self):
+        """The ground rule holds only within 60 degrees of straight under. A light ball (r 2) hits a heavy resting one
+        (r 5) whose centre lies 17 degrees under its path, with no gravity: the bounce splits, so sum(r^2 v) holds."""
+        balls = CBalls(2)
+        balls.set_material(0.0, MATERIAL[1], MATERIAL[2])
+        balls.spawn(100.0, 100.0, 300.0, 0.0, 2, 1)
+        balls.spawn(110.0, 102.1, 0.0, 0.0, 5, 2)  # at contact the normal is about (0.95, 0.3)
+        for _ in range(12):
+            balls.step(1, 1, DT / SUBSTEPS, 0.0, 1.0, HIT_MIN)
+        vx, vy = free_velocity(balls)
+        self.assertAlmostEqual(4 * 300.0, 4 * vx[0] + 25 * vx[1], delta=2.0)
+        self.assertAlmostEqual(0.0, 4 * vy[0] + 25 * vy[1], delta=2.0)
+        self.assertLess(vx[0], 0.0)  # the light ball bounced back
+
+    def test_a_ball_bounces_off_each_side_wall(self):
+        for x, vx in ((300.0, 300.0), (20.0, -300.0)):
+            balls = CBalls(1)
+            balls.set_material(0.0, MATERIAL[1], MATERIAL[2])
+            balls.spawn(x, 100.0, vx, 0.0, 4, 1)
+            for _ in range(10):
+                balls.step(1, SUBSTEPS, DT, 0.0, 1.0, HIT_MIN)  # no gravity, no damping
+            self.assertAlmostEqual(-MATERIAL[1] * vx, free_velocity(balls)[0][0], delta=5.0)
+
+    def test_friction_between_balls_keeps_their_momentum_and_holds_by_the_push(self):
+        """Two balls of r 2 and 5 overlap by 0.5 px and slide past each other at 300 px/s. Friction 0.5 holds 0.25 px of
+        the 0.75 px slide in the substep (Coulomb: friction x push), 230 px/s after it, and it keeps sum(r^2 v)."""
+        balls = CBalls(2)
+        balls.set_material(0.5, 0.0, 0.0)
+        balls.spawn(100.0, 100.0, 0.0, 150.0, 2, 0)
+        balls.spawn(106.5, 100.0, 0.0, -150.0, 5, 0)
+        balls.step(1, 1, DT / SUBSTEPS, 0.0, 1.0, HIT_MIN)
+        vy = free_velocity(balls)[1]
+        self.assertAlmostEqual(4 * 150.0 - 25 * 150.0, 4 * vy[0] + 25 * vy[1], delta=1.0)
+        self.assertTrue(200.0 <= vy[0] - vy[1] <= 260.0, vy)
+
+    def test_a_kick_adds_to_a_moving_ball_s_velocity(self):
+        balls = CBalls(1)
+        balls.spawn(160.0, 200.0, 0.0, -200.0, 4, 1)
+        balls.kick(0.0, -100.0)
+        self.assertAlmostEqual(-300.0, free_velocity(balls)[1][0], delta=0.5)
 
     def test_friction_stops_a_sliding_ball(self):
         slid = {}
