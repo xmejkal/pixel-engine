@@ -100,10 +100,9 @@ static float inv_sqrt(float x) {
 #define SHARE_ROW(a) {SHARE(a, 2), SHARE(a, 3), SHARE(a, 4), SHARE(a, 5)}
 static const float share[4][4] = {SHARE_ROW(2), SHARE_ROW(3), SHARE_ROW(4), SHARE_ROW(5)};  // [ri - 2][rj - 2]
 
-// A bounce for the substep's end, or one more lost.
+// A bounce for the substep's end, unless the list is full.
 static void bounce_add(fx_balls_t *b, int32_t i, int32_t j, float speed) {
     if (b->bounces_n == FX_BALLS_BOUNCES_MAX) {
-        b->bounces_dropped++;
         return;
     }
     fx_bounce_t *e = &b->bounces[b->bounces_n++];
@@ -112,10 +111,9 @@ static void bounce_add(fx_balls_t *b, int32_t i, int32_t j, float speed) {
     e->speed = speed;
 }
 
-// The sliding part t of a contact's move, less what friction holds: all of it while |t| is up to limit (static), else
-// limit of it (kinetic). Position-based Coulomb friction as Macklin et al. give it ("Unified Particle Physics for
-// Real-Time Applications", SIGGRAPH 2014, section 6.1), written from the paper, no code copied (D14). Return the part
-// of t to take back: t itself or t scaled down.
+// The fraction of a contact's sliding move t (|t| squared is t2) that friction takes back: all of it while |t| is up to
+// limit (static), else limit / |t| (kinetic). Position-based Coulomb friction as Macklin et al. give it ("Unified
+// Particle Physics for Real-Time Applications", SIGGRAPH 2014, section 6.1), written from the paper, no code copied (D14).
 static float held(float t2, float limit) {
     return t2 <= limit * limit ? 1.0f : limit * inv_sqrt(t2);
 }
@@ -242,10 +240,10 @@ static void bounce(fx_balls_t *b, const view_t *v) {
                 // quarter of its bounce (r4 on r4 at restitution 0.5: 0.17 of its closing speed). This stand-in costs
                 // no second sweep of the grid.
                 float rest2 = b->restitution_threshold * b->restitution_threshold;
-                if (ny > 0.0f && vx[j] * vx[j] + vy[j] * vy[j] < rest2) {  // j under i (y grows down)
+                if (ny > 0.5f && vx[j] * vx[j] + vy[j] * vy[j] < rest2) {  // j under i, within 60 degrees (y grows down)
                     si = 1.0f;
                     sj = 0.0f;
-                } else if (ny < 0.0f && vx[i] * vx[i] + vy[i] * vy[i] < rest2) {
+                } else if (ny < -0.5f && vx[i] * vx[i] + vy[i] * vy[i] < rest2) {
                     si = 0.0f;
                     sj = 1.0f;
                 }
@@ -309,7 +307,6 @@ static void substep(fx_balls_t *b, float dt, float gravity, float damping, float
 void fx_balls_step(fx_balls_t *b, int32_t steps, int32_t substeps, float dt, float gravity, float damping,
                    float hit_min) {
     events_clear(&b->events);
-    b->bounces_dropped = 0;
     float sub_dt = dt / (float)substeps, keep = 1.0f - (1.0f - damping) / (float)substeps;  // the step's loss, spread
     for (int32_t k = 0; k < steps * substeps; k++) {
         substep(b, sub_dt, gravity, keep, hit_min);

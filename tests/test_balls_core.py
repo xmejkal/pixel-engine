@@ -29,7 +29,7 @@ class Tft:
 
 
 def pour(balls, rng, colour, n=POUR):
-    """n balls across the top, as balls.py pours them."""
+    """n balls across the top, as balls.py pours them (the tests pour 25 to 300 balls, the game 10 to 2,000)."""
     for _ in range(n):
         r = rng.randrange(2, 6)
         balls.spawn(rng.uniform(r, W - r), -r - rng.uniform(0, 40), 0.0, 0.0, r, colour)
@@ -192,6 +192,11 @@ class BallsCoreTest(unittest.TestCase):
             balls.step(65, *PHYSICS)
         with self.assertRaises(ValueError):
             balls.step(1, 9, DT, GRAVITY, DAMPING, HIT_MIN)
+        for dt in (0.0, float("nan")):
+            with self.assertRaises(ValueError):
+                balls.step(1, SUBSTEPS, dt, GRAVITY, DAMPING, HIT_MIN)
+        with self.assertRaises(ValueError):
+            balls.draw(Tft(), array("H", [0] * COLOURS), 0x10000)
         with self.assertRaises(ValueError):
             balls.read(array("h", [0, 0]))
         with self.assertRaises(ValueError):
@@ -276,7 +281,8 @@ class MaterialTest(unittest.TestCase):
         self.assertGreater(slid[0.0], 120.0)  # the damping alone caps the slide at 150 px
 
     def test_friction_piles_the_heap_taller(self):
-        """100 balls from a spout 6 px wide: 43 px high at friction 0.5, 22 at 0 (Mac run 2026-11-04)."""
+        """100 balls from a spout 6 px wide: 43.5 px high at friction 0.5, 22.4 at 0 (Mac run 2026-11-04). The window
+        catches a friction with no kinetic limit (35.7 px, the P598 refuter's planted defect)."""
         high = {}
         for friction in (0.0, 0.5):
             rng, balls = random.Random(5), CBalls(100)
@@ -288,7 +294,7 @@ class MaterialTest(unittest.TestCase):
             run(balls, 400)
             ys, rs = balls.xy()[1], radii(balls)
             high[friction] = H - min(y - r for y, r in zip(ys, rs))
-        self.assertGreater(high[0.5], 1.5 * high[0.0], high)
+        self.assertTrue(40.0 <= high[0.5] <= 47.0 and high[0.0] < 30.0, high)
 
     def test_the_settled_pile_at_the_game_s_material_rests(self):
         balls = pile(material=MATERIAL)

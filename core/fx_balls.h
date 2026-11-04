@@ -22,9 +22,9 @@
 #define FX_BALLS_CELL (2 * FX_BALLS_R_MAX)  // the grid's cell: two touching centres are at most a cell apart
 #define FX_BALLS_COLS (FX_BALLS_W / FX_BALLS_CELL)
 #define FX_BALLS_ROWS (FX_BALLS_H / FX_BALLS_CELL)
-#define FX_BALLS_PASSES 2  // relaxation passes a substep: one left 1.29 px of overlap in the plan's simulation
+#define FX_BALLS_PASSES 2  // relaxation passes a substep: one left 1.29 px of overlap (P598's plan); the tests' OVERLAP_PX holds at two
 #define FX_BALLS_MOVE_MAX 1.5f  // a ball's whole move in a substep, in px, so no touching pair can swap sides
-#define FX_BALLS_BOUNCES_MAX 256  // the hits of one substep that bounce; past it a bounce is lost and counted
+#define FX_BALLS_BOUNCES_MAX 256  // the hits of one substep that bounce; past it a bounce is lost (300 balls landing at once lost none)
 #define FX_BALLS_WALL_LEFT (-1)  // a bounce's j for a wall, so a bounce off a ball keeps j >= 0
 #define FX_BALLS_WALL_RIGHT (-2)
 #define FX_BALLS_WALL_FLOOR (-3)
@@ -44,7 +44,7 @@ typedef struct {
     uint8_t span[FX_BALLS_R_MAX + 1][FX_BALLS_R_MAX + 1];  // span[r][dx]: a disc of radius r's half-height dx from its centre
     // --- MVP (P598): the material, the PO 2026-11-04: "doesn't feel very realistic", "the balls really don't bounce" ---
     float friction, restitution, restitution_threshold;  // fx_balls_set_material's; all 0 from init, no grip, no bounce
-    int32_t bounces_n, bounces_dropped;  // the substep's bounces; dropped counts the last step call's lost ones
+    int32_t bounces_n;  // the substep's bounces
     fx_bounce_t bounces[FX_BALLS_BOUNCES_MAX];
 } fx_balls_t;
 

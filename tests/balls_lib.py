@@ -1,5 +1,7 @@
 """engine/core/grid.c and fx_balls.c on the Mac (P598): clang_lib builds them once, and CBalls stands in for
 engine.Balls (engine/binding.c) through ctypes, with the binding's checks, so a test refuses what the board refuses.
+The checks are written twice, here and in binding.c, and the tests see only this copy: a change to one changes the
+other.
 Grid is the Mac's own look at grid.c. --- MVP (P598) ---"""
 
 import ctypes
@@ -86,6 +88,8 @@ class CBalls:
     def step(self, steps, substeps, dt, gravity, damping, hit_min):
         if not 0 <= steps <= MAX_STEPS or not 1 <= substeps <= MAX_SUBSTEPS:
             raise ValueError("steps is 0 to %d, substeps 1 to %d" % (MAX_STEPS, MAX_SUBSTEPS))
+        if not dt > 0:
+            raise ValueError("dt is more than 0")
         self.lib.fx_balls_step(self.block, steps, substeps, *(ctypes.c_float(v) for v in (dt, gravity, damping, hit_min)))
 
     def read(self, out):
@@ -101,6 +105,8 @@ class CBalls:
     def draw(self, tft, palette, bg):
         if palette.typecode != "H" or len(palette) < COLOURS:
             raise ValueError("an array('H') of %d colours is needed" % COLOURS)
+        if not 0 <= bg <= 0xFFFF:
+            raise ValueError("bg is a 16-bit colour")
         self.lib.fx_balls_draw(self.block, (ctypes.c_uint16 * (len(tft.frame) // 2)).from_buffer(tft.frame),
                                (ctypes.c_uint16 * len(palette)).from_buffer(palette), ctypes.c_uint16(bg))
 

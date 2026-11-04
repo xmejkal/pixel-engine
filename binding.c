@@ -410,6 +410,9 @@ static mp_obj_t balls_step(size_t n_args, const mp_obj_t *args) {
     for (size_t k = 0; k < 4; k++) {
         v[k] = (float)mp_obj_get_float(args[k + 3]);
     }
+    if (!(v[0] > 0.0f)) {  // a NaN fails too: the velocity is a move over dt
+        mp_raise_ValueError(MP_ERROR_TEXT("dt is more than 0"));
+    }
     fx_balls_step(b, (int32_t)steps, (int32_t)substeps, v[0], v[1], v[2], v[3]);
     return mp_const_none;
 }
