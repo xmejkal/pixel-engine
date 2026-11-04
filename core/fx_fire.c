@@ -15,7 +15,7 @@ static uint32_t xorshift32(uint32_t *state) {
 // The random draws, in this order, so a reference can repeat them byte for byte. Each draw is one xorshift32 call.
 // - fx_fire_init: the map's 8192 cells row by row, one draw each, then the FX_FIRE_MAX_SPOTS spots, one draw each.
 // - fx_fire_set_look, when the spot count changes: the FX_FIRE_MAX_SPOTS spots again, one draw each.
-// - fx_fire_step, per step: with spots 0, the bottom row's cells left to right, one draw each (part 1's row). Else
+// - fx_fire_step, per step: with the base off (P596), no draw for the bottom row. Else with spots 0, the bottom row's cells left to right, one draw each (part 1's row). Else
 //   each spot in turn, one draw (its walk or jump), then the bottom row's cells left to right, one draw each (the
 //   flicker). Then, with sway 1, the rows from the top down, one draw per 16 cells from x = 0, 16, 32 and so on.
 //   With wind not 0, each row takes one draw first, before its sway draws (the wind's). Then, with embers not 0,
@@ -86,6 +86,7 @@ void fx_fire_init(fx_fire_t *f, uint8_t *heat, uint8_t *cooling, int32_t w, int3
     f->fast = 0;
     f->embers = 0;
     f->fade = 0;
+    f->base = 1;
     memset(f->ember_heat, 0, sizeof f->ember_heat);
     memset(heat, 0, (size_t)w * (size_t)h);
     make_cooling(f);
@@ -183,7 +184,9 @@ void fx_fire_step(fx_fire_t *f, int32_t steps, int32_t wind) {
     int32_t against = wind > 0 ? -1 : 1;  // a cell reads upwind, so positive wind carries heat to larger x
     uint8_t *bottom = f->heat + (h - 1) * w;
     for (int32_t s = 0; s < steps; s++) {
-        if (f->spots > 0) {
+        if (!f->base) {
+            memset(bottom, 0, (size_t)w);
+        } else if (f->spots > 0) {
             spots_row(f, bottom);
         } else {
             for (int32_t x = 0; x < w; x++) {
@@ -264,6 +267,32 @@ void fx_fire_blend(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette,
             p[1] = alpha_blend_565(c, p[1], a);
             p[pw] = alpha_blend_565(c, p[pw], a);
             p[pw + 1] = alpha_blend_565(c, p[pw + 1], a);
+        }
+    }
+}
+
+// --- MVP (P596) ---
+void fx_fire_set_base(fx_fire_t *f, int32_t on) {
+    f->base = on ? 1 : 0;
+}
+
+void fx_fire_burn(fx_fire_t *f, int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t r, uint8_t heat) {
+    int32_t w = f->w, h = f->h, dx = x1 - x0, dy = y1 - y0;
+    int32_t n = (dx < 0 ? -dx : dx) > (dy < 0 ? -dy : dy) ? (dx < 0 ? -dx : dx) : (dy < 0 ? -dy : dy);
+    for (int32_t i = 0; i <= n; i++) {
+        int32_t cx = x0 + (n ? dx * i / n : 0), cy = y0 + (n ? dy * i / n : 0);
+        for (int32_t oy = -r; oy <= r; oy++) {
+            int32_t y = cy + oy;
+            if (y < 0 || y >= h) {
+                continue;
+            }
+            uint8_t *row = f->heat + y * w;
+            for (int32_t ox = -r; ox <= r; ox++) {
+                int32_t x = cx + ox;
+                if (x >= 0 && x < w && ox * ox + oy * oy <= r * r && row[x] < heat) {
+                    row[x] = heat;
+                }
+            }
         }
     }
 }

@@ -28,6 +28,7 @@ typedef struct {
     int32_t ember_x[FX_FIRE_MAX_EMBERS], ember_y[FX_FIRE_MAX_EMBERS];  // in 1/256 of a cell
     int32_t ember_vx[FX_FIRE_MAX_EMBERS], ember_vy[FX_FIRE_MAX_EMBERS];  // in 1/256 of a cell a step
     int32_t ember_heat[FX_FIRE_MAX_EMBERS];  // 0 is a free slot
+    int32_t base;  // 1: the step makes the bottom row; 0: it clears it (P596)
 } fx_fire_t;
 
 // Zero the field, seed the random numbers (a seed of 0 becomes 1), make the cooling map and place the spots. The look
@@ -64,5 +65,15 @@ void fx_fire_draw(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette);
 // The same panel blended over what it holds (the picture mode, over the painted sky): each pixel becomes
 // alpha_blend_565(palette[heat], pixel, alpha[heat]) of s3lcd/src/blend565.h. A cell of alpha 0 leaves its pixels.
 void fx_fire_blend(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette, const uint8_t *alpha);
+
+// --- MVP (P596) ---
+// on 1 (init's): each step makes the bottom row, from the spots or at random. on 0: each step clears the bottom row
+// instead and takes no draw for it, so only what fx_fire_burn puts in burns (bodies on fire).
+void fx_fire_set_base(fx_fire_t *f, int32_t on);
+
+// Heat put in along the segment from cell (x0, y0) to (x1, y1): at each of its max(|dx|, |dy|) + 1 points, every
+// cell within r (dx * dx + dy * dy <= r * r) and inside the field keeps the larger of its heat and heat. The ends
+// may lie outside the field.
+void fx_fire_burn(fx_fire_t *f, int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t r, uint8_t heat);
 
 #endif

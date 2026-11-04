@@ -219,6 +219,33 @@ static mp_obj_t heat_field_set_look(size_t n_args, const mp_obj_t *args) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(heat_field_set_look_obj, 9, 9, heat_field_set_look);
 
+// --- MVP (P596) ---
+// set_base(on): see fx_fire_set_base. A false on clears the bottom row each step, so only burn puts heat in.
+static mp_obj_t heat_field_set_base(mp_obj_t self_in, mp_obj_t on_in) {
+    fx_fire_set_base(&live(self_in)->fire, mp_obj_is_true(on_in));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(heat_field_set_base_obj, heat_field_set_base);
+
+// burn(x0, y0, x1, y1, r, heat): see fx_fire_burn, in cells. The ends may lie off the field by up to a field's size
+// (a body above the screen), r is 0 to 16 and heat 0 to 255.
+static mp_obj_t heat_field_burn(size_t n_args, const mp_obj_t *args) {
+    heat_field_obj_t *self = live(args[0]);
+    int32_t w = self->fire.w, h = self->fire.h;
+    mp_int_t v[6];
+    for (size_t k = 0; k < 6; k++) {
+        v[k] = mp_obj_get_int(args[k + 1]);
+    }
+    if (v[0] < -w || v[0] > 2 * w || v[2] < -w || v[2] > 2 * w || v[1] < -h || v[1] > 2 * h || v[3] < -h
+        || v[3] > 2 * h || v[4] < 0 || v[4] > 16 || v[5] < 0 || v[5] > 255) {
+        mp_raise_ValueError(MP_ERROR_TEXT("x within -w to 2w, y within -h to 2h, r 0 to 16, heat 0 to 255"));
+    }
+    fx_fire_burn(&self->fire, (int32_t)v[0], (int32_t)v[1], (int32_t)v[2], (int32_t)v[3], (int32_t)v[4],
+        (uint8_t)v[5]);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(heat_field_burn_obj, 7, 7, heat_field_burn);
+
 // step(steps, wind): see fx_fire_step. A frame takes at most 2 steps, so more than 64 is a mistake.
 static mp_obj_t heat_field_step(mp_obj_t self_in, mp_obj_t steps_in, mp_obj_t wind_in) {
     heat_field_obj_t *self = live(self_in);
@@ -290,6 +317,8 @@ static void heat_field_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
 static const mp_rom_map_elem_t heat_field_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_set_look), MP_ROM_PTR(&heat_field_set_look_obj) },
     { MP_ROM_QSTR(MP_QSTR_step), MP_ROM_PTR(&heat_field_step_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_base), MP_ROM_PTR(&heat_field_set_base_obj) },
+    { MP_ROM_QSTR(MP_QSTR_burn), MP_ROM_PTR(&heat_field_burn_obj) },
     { MP_ROM_QSTR(MP_QSTR_draw), MP_ROM_PTR(&heat_field_draw_obj) },
     { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&heat_field_del_obj) },
 };
