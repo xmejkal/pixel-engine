@@ -1,6 +1,6 @@
-// The engine module. The world part is the P589 probe: the thin MicroPython binding of engine/core/world.c, for
-// probe589.py to time a C step, its events and a call back into Python. One float world and one fixed world, loaded
-// together. spawn and read (P593) are the rain demo's, on the float world only. --- probe, throwaway (P589) ---
+// The engine module. engine.Bodies (P590) is the world of engine/core/world.c as a native type: C steps the falling
+// bodies and keeps the facts of a step as events, which Python drains once a frame (D11 to D13). Its twin is
+// games/motion.py's Bodies, with the same API. --- MVP (P590) ---
 // The HeatField part is P595's and is kept (D8): the fire of engine/core/fx_fire.c as a native type, drawn into the
 // s3lcd frame, opaque or blended (P603). --- MVP (P595) ---
 #include "py/runtime.h"
@@ -13,138 +13,122 @@
 #include "s3lcd.h"
 #include "world.h"
 
+_Static_assert(sizeof(int) == sizeof(int32_t), "an array('i') holds int32 events");
+
 extern const mp_obj_type_t s3lcd_type;  // s3lcd.c's ESPLCD, so s3lcd stays unchanged
 
-enum { MODE_FLOAT = 0, MODE_FIXED = 1 };
+// --- MVP (P590): engine.Bodies ---
 
-static world_float_t world_f;
-static world_fixed_t world_q;
+#define BODIES_MAX 256  // n is 1 to 256: the rain's 160 and room
+#define BODIES_MAX_STEPS 64  // a frame takes at most 8 steps (StepClock's cap), so more than 64 is a mistake
 
-static const void *floats(mp_obj_t obj, size_t *n) {  // an array('f'): its data, and its length in floats
-    mp_buffer_info_t info;
-    mp_get_buffer_raise(obj, &info, MP_BUFFER_READ);
-    if (info.typecode != 'f') {
-        mp_raise_TypeError(MP_ERROR_TEXT("an array('f') is needed"));
+typedef struct {
+    mp_obj_base_t base;
+    world_t world;  // then its arrays in the same block: world_bytes(cap) bytes from here
+} bodies_obj_t;
+
+static const mp_obj_type_t bodies_type;
+
+// Bodies(n): n bodies, each asleep at (0, 0). The world lives in the object's own block of the GC heap (in PSRAM), so
+// the GC frees it with the object and no finaliser runs; it stores no pointer, so nothing points into it.
+static mp_obj_t bodies_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    mp_arg_check_num(n_args, n_kw, 1, 1, false);
+    mp_int_t n = mp_obj_get_int(args[0]);
+    if (n < 1 || n > BODIES_MAX) {
+        mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("n is 1 to %d"), BODIES_MAX);
     }
-    *n = info.len / sizeof(float);
-    return info.buf;
+    bodies_obj_t *self = mp_obj_malloc_var(bodies_obj_t, world, uint8_t, world_bytes((int32_t)n), type);
+    world_init(&self->world, (int32_t)n);
+    return MP_OBJ_FROM_PTR(self);
 }
 
-// load(x, y, vx, vy, rest_y): five array('f') of one length, into both worlds.
-static mp_obj_t engine_load(size_t n_args, const mp_obj_t *args) {
-    const float *c[5];
-    size_t n = 0;
-    for (size_t k = 0; k < 5; k++) {
-        size_t len;
-        c[k] = floats(args[k], &len);
-        if (k > 0 && len != n) {
-            mp_raise_ValueError(MP_ERROR_TEXT("the arrays differ in length"));
-        }
-        n = len;
+static world_t *bodies_world(mp_obj_t self_in) {  // a Bodies method called through its type with another object raises
+    if (!mp_obj_is_type(self_in, &bodies_type)) {
+        mp_raise_TypeError(MP_ERROR_TEXT("a Bodies is needed"));
     }
-    if (n > WORLD_MAX_BODIES) {
-        mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("more than %d bodies"), WORLD_MAX_BODIES);
-    }
-    world_load_float(&world_f, (int32_t)n, c[0], c[1], c[2], c[3], c[4]);
-    world_load_fixed(&world_q, (int32_t)n, c[0], c[1], c[2], c[3], c[4]);
-    return mp_const_none;
+    return &((bodies_obj_t *)MP_OBJ_TO_PTR(self_in))->world;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(engine_load_obj, 5, 5, engine_load);
 
-// step(mode, steps, rate, gravity, restitution, friction): the world's awake body-steps since the load.
-static mp_obj_t engine_step(size_t n_args, const mp_obj_t *args) {
-    mp_int_t mode = mp_obj_get_int(args[0]);
-    mp_int_t steps = mp_obj_get_int(args[1]);
-    mp_int_t rate = mp_obj_get_int(args[2]);
-    float gravity = (float)mp_obj_get_float(args[3]);
-    float restitution = (float)mp_obj_get_float(args[4]);
-    float friction = (float)mp_obj_get_float(args[5]);
-    if (rate <= 0) {
-        mp_raise_ValueError(MP_ERROR_TEXT("rate must be over 0"));
+// spawn(i, x, y, vx, vy, rest_y): body i at this state, awake.
+static mp_obj_t bodies_spawn(size_t n_args, const mp_obj_t *args) {
+    world_t *w = bodies_world(args[0]);
+    mp_int_t i = mp_obj_get_int(args[1]);
+    if (i < 0 || i >= w->cap) {
+        mp_raise_msg(&mp_type_IndexError, MP_ERROR_TEXT("a body index is 0 to n - 1"));
     }
-    if (mode == MODE_FLOAT) {
-        world_step_float(&world_f, (int32_t)steps, (int32_t)rate, gravity, restitution, friction);
-        return mp_obj_new_int_from_uint(world_f.s.awake_steps);
-    }
-    if (mode == MODE_FIXED) {
-        world_step_fixed(&world_q, (int32_t)steps, (int32_t)rate, gravity, restitution, friction);
-        return mp_obj_new_int_from_uint(world_q.s.awake_steps);
-    }
-    mp_raise_ValueError(MP_ERROR_TEXT("mode is engine.FLOAT or engine.FIXED"));
-}
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(engine_step_obj, 6, 6, engine_step);
-
-// read_y(mode, out): each body's y into an array('f') of at least n floats.
-static mp_obj_t engine_read_y(mp_obj_t mode_in, mp_obj_t out_in) {
-    mp_buffer_info_t info;
-    mp_get_buffer_raise(out_in, &info, MP_BUFFER_WRITE);
-    mp_int_t mode = mp_obj_get_int(mode_in);
-    int32_t n = mode == MODE_FIXED ? world_q.s.n : world_f.s.n;
-    if (info.typecode != 'f' || info.len < (size_t)n * sizeof(float)) {
-        mp_raise_ValueError(MP_ERROR_TEXT("an array('f') of n floats is needed"));
-    }
-    if (mode == MODE_FIXED) {
-        world_read_y_fixed(&world_q, info.buf);
-    } else {
-        world_read_y_float(&world_f, info.buf);
-    }
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_2(engine_read_y_obj, engine_read_y);
-
-// spawn(i, x, y, vx, vy, rest_y): body i of the float world at this state, awake; n grows to i + 1 when i is past it.
-static mp_obj_t engine_spawn(size_t n_args, const mp_obj_t *args) {
     float v[5];
     for (size_t k = 0; k < 5; k++) {
-        v[k] = (float)mp_obj_get_float(args[k + 1]);
+        v[k] = (float)mp_obj_get_float(args[k + 2]);
     }
-    if (!world_spawn_float(&world_f, (int32_t)mp_obj_get_int(args[0]), v[0], v[1], v[2], v[3], v[4])) {
-        mp_raise_msg_varg(&mp_type_IndexError, MP_ERROR_TEXT("a body index is 0 to %d"), WORLD_MAX_BODIES - 1);
-    }
+    world_spawn(w, (int32_t)i, v[0], v[1], v[2], v[3], v[4]);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(engine_spawn_obj, 6, 6, engine_spawn);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(bodies_spawn_obj, 7, 7, bodies_spawn);
 
-// read(out): the float world's x, y and asleep per body into an array('h') of at least 3n, as ints; returns n.
-static mp_obj_t engine_read(mp_obj_t out_in) {
+// step(steps, dt, gravity, restitution, friction): see world_step. It clears the events first, also for 0 steps.
+static mp_obj_t bodies_step(size_t n_args, const mp_obj_t *args) {
+    world_t *w = bodies_world(args[0]);
+    mp_int_t steps = mp_obj_get_int(args[1]);
+    if (steps < 0 || steps > BODIES_MAX_STEPS) {
+        mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("steps is 0 to %d"), BODIES_MAX_STEPS);
+    }
+    float v[4];
+    for (size_t k = 0; k < 4; k++) {
+        v[k] = (float)mp_obj_get_float(args[k + 2]);
+    }
+    world_step(w, (int32_t)steps, v[0], v[1], v[2], v[3]);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(bodies_step_obj, 6, 6, bodies_step);
+
+// read(out): each body's x, y and asleep into an array('h') of at least 3n, as ints; returns n.
+static mp_obj_t bodies_read(mp_obj_t self_in, mp_obj_t out_in) {
+    world_t *w = bodies_world(self_in);
     mp_buffer_info_t info;
     mp_get_buffer_raise(out_in, &info, MP_BUFFER_WRITE);
-    if (info.typecode != 'h' || info.len < (size_t)world_f.s.n * 3 * sizeof(int16_t)) {
+    if (info.typecode != 'h' || info.len < (size_t)w->cap * 3 * sizeof(int16_t)) {
         mp_raise_ValueError(MP_ERROR_TEXT("an array('h') of 3n ints is needed"));
     }
-    world_read_float(&world_f, info.buf);
-    return MP_OBJ_NEW_SMALL_INT(world_f.s.n);
+    return MP_OBJ_NEW_SMALL_INT(world_read(w, info.buf));
 }
-static MP_DEFINE_CONST_FUN_OBJ_1(engine_read_obj, engine_read);
+static MP_DEFINE_CONST_FUN_OBJ_2(bodies_read_obj, bodies_read);
 
-// drain(buf, n): up to n of the float world's last step-call events into an array('i') as id, kind, speed; how many.
-static mp_obj_t engine_drain(mp_obj_t buf_in, mp_obj_t n_in) {
+// drain(out): up to len(out) // 3 of the last step call's events into an array('i') as id, kind, speed; how many.
+static mp_obj_t bodies_drain(mp_obj_t self_in, mp_obj_t out_in) {
+    world_t *w = bodies_world(self_in);
     mp_buffer_info_t info;
-    mp_get_buffer_raise(buf_in, &info, MP_BUFFER_WRITE);
-    if (info.typecode != 'i' || sizeof(int) != sizeof(int32_t)) {
-        mp_raise_TypeError(MP_ERROR_TEXT("an array('i') is needed"));
+    mp_get_buffer_raise(out_in, &info, MP_BUFFER_WRITE);
+    if (info.typecode != 'i') {
+        mp_raise_ValueError(MP_ERROR_TEXT("an array('i') is needed"));
     }
-    mp_int_t n = mp_obj_get_int(n_in);
-    mp_int_t room = (mp_int_t)(info.len / (3 * sizeof(int32_t)));
-    return MP_OBJ_NEW_SMALL_INT(world_drain(&world_f.s, info.buf, (int32_t)(n < room ? n : room)));
+    return MP_OBJ_NEW_SMALL_INT(world_drain(w, info.buf, (int32_t)(info.len / (3 * sizeof(int32_t)))));
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(engine_drain_obj, engine_drain);
+static MP_DEFINE_CONST_FUN_OBJ_2(bodies_drain_obj, bodies_drain);
 
-// call_back(fn, n): call fn(i) for i in range(n), the cost of C calling Python.
-static mp_obj_t engine_call_back(mp_obj_t fn, mp_obj_t n_in) {
-    mp_int_t n = mp_obj_get_int(n_in);
-    for (mp_int_t i = 0; i < n; i++) {
-        mp_call_function_1(fn, MP_OBJ_NEW_SMALL_INT(i));
+// dropped: the last step call's events past WORLD_MAX_EVENTS. Every other name goes on to the methods.
+static void bodies_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+    if (attr == MP_QSTR_dropped && dest[0] == MP_OBJ_NULL) {
+        dest[0] = MP_OBJ_NEW_SMALL_INT(bodies_world(self_in)->dropped);
+    } else {
+        dest[1] = MP_OBJ_SENTINEL;
     }
-    return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(engine_call_back_obj, engine_call_back);
 
-// nothing(): the empty Python-to-C call.
-static mp_obj_t engine_nothing(void) {
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_0(engine_nothing_obj, engine_nothing);
+static const mp_rom_map_elem_t bodies_locals_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_spawn), MP_ROM_PTR(&bodies_spawn_obj) },
+    { MP_ROM_QSTR(MP_QSTR_step), MP_ROM_PTR(&bodies_step_obj) },
+    { MP_ROM_QSTR(MP_QSTR_read), MP_ROM_PTR(&bodies_read_obj) },
+    { MP_ROM_QSTR(MP_QSTR_drain), MP_ROM_PTR(&bodies_drain_obj) },
+};
+static MP_DEFINE_CONST_DICT(bodies_locals, bodies_locals_table);
+
+static MP_DEFINE_CONST_OBJ_TYPE(
+    bodies_type,
+    MP_QSTR_Bodies,
+    MP_TYPE_FLAG_NONE,
+    make_new, bodies_make_new,
+    attr, bodies_attr,
+    locals_dict, &bodies_locals);
 
 // --- MVP (P595): engine.HeatField ---
 
@@ -340,16 +324,9 @@ static MP_DEFINE_CONST_FUN_OBJ_0(engine_largest_free_internal_obj, engine_larges
 
 static const mp_rom_map_elem_t engine_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_engine) },
-    { MP_ROM_QSTR(MP_QSTR_FLOAT), MP_ROM_INT(MODE_FLOAT) },
-    { MP_ROM_QSTR(MP_QSTR_FIXED), MP_ROM_INT(MODE_FIXED) },
-    { MP_ROM_QSTR(MP_QSTR_load), MP_ROM_PTR(&engine_load_obj) },
-    { MP_ROM_QSTR(MP_QSTR_step), MP_ROM_PTR(&engine_step_obj) },
-    { MP_ROM_QSTR(MP_QSTR_read_y), MP_ROM_PTR(&engine_read_y_obj) },
-    { MP_ROM_QSTR(MP_QSTR_spawn), MP_ROM_PTR(&engine_spawn_obj) },
-    { MP_ROM_QSTR(MP_QSTR_read), MP_ROM_PTR(&engine_read_obj) },
-    { MP_ROM_QSTR(MP_QSTR_drain), MP_ROM_PTR(&engine_drain_obj) },
-    { MP_ROM_QSTR(MP_QSTR_call_back), MP_ROM_PTR(&engine_call_back_obj) },
-    { MP_ROM_QSTR(MP_QSTR_nothing), MP_ROM_PTR(&engine_nothing_obj) },
+    { MP_ROM_QSTR(MP_QSTR_Bodies), MP_ROM_PTR(&bodies_type) },
+    { MP_ROM_QSTR(MP_QSTR_HIT), MP_ROM_INT(WORLD_EVENT_HIT) },
+    { MP_ROM_QSTR(MP_QSTR_SLEEP), MP_ROM_INT(WORLD_EVENT_SLEEP) },
     { MP_ROM_QSTR(MP_QSTR_HeatField), MP_ROM_PTR(&heat_field_type) },
     { MP_ROM_QSTR(MP_QSTR_largest_free_internal), MP_ROM_PTR(&engine_largest_free_internal_obj) },
 };

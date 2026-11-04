@@ -1,184 +1,99 @@
-// The world's step in two modes (P589 probe): world.h says what each function does.
-// --- probe, throwaway (P589) ---
+// The world's step (P590): world.h says what each function does. --- MVP (P590) ---
 #include "world.h"
 
 #include <string.h>
 
-#define Q_ONE 65536  // 1.0 in Q16.16
+// The arrays after the struct, found from cap at each call.
+#define X(w) ((float *)((w) + 1))
+#define Y(w) (X(w) + (w)->cap)
+#define VX(w) (Y(w) + (w)->cap)
+#define VY(w) (VX(w) + (w)->cap)
+#define REST_Y(w) (VY(w) + (w)->cap)
+#define ASLEEP(w) ((uint8_t *)(REST_Y(w) + (w)->cap))
 
-static int32_t to_q(float f) {  // f * 2^16 is exact in float32; round half away from 0
-    float q = f * (float)Q_ONE;
-    return (int32_t)(q >= 0.0f ? q + 0.5f : q - 0.5f);
+size_t world_bytes(int32_t cap) {  // cap is 1 to WORLD_MAX_BODIES: the binding checks it
+    return sizeof(world_t) + (5 * sizeof(float) + sizeof(uint8_t)) * (size_t)cap;
 }
 
-static int32_t q_mul(int32_t a, int32_t b) {  // int64 product; / truncates toward 0 for a negative speed too
-    return (int32_t)(((int64_t)a * b) / Q_ONE);
+void world_init(world_t *w, int32_t cap) {
+    memset(w, 0, world_bytes(cap));
+    w->cap = cap;
+    memset(ASLEEP(w), 1, (size_t)cap);
 }
 
-static void load_state(world_state_t *s, int32_t n) {
-    memset(s, 0, sizeof(*s));
-    s->n = n < 0 ? 0 : (n > WORLD_MAX_BODIES ? WORLD_MAX_BODIES : n);
+int32_t world_spawn(world_t *w, int32_t i, float x, float y, float vx, float vy, float rest_y) {
+    if (i < 0 || i >= w->cap) {
+        return 0;
+    }
+    X(w)[i] = x;
+    Y(w)[i] = y;
+    VX(w)[i] = vx;
+    VY(w)[i] = vy;
+    REST_Y(w)[i] = rest_y;
+    ASLEEP(w)[i] = 0;
+    return 1;
 }
 
-static void add_event(world_state_t *s, int32_t id, int32_t kind, int32_t speed) {
-    if (s->n_events == WORLD_MAX_EVENTS) {
-        s->dropped++;
+static void add_event(world_t *w, int32_t id, int32_t kind, int32_t speed) {
+    if (w->n_events == WORLD_MAX_EVENTS) {
+        w->dropped++;
         return;
     }
-    world_event_t *e = &s->events[s->n_events++];
+    world_event_t *e = &w->events[w->n_events++];
     e->id = id;
     e->kind = kind;
     e->speed = speed;
 }
 
-static void clear_events(world_state_t *s) {
-    s->n_events = 0;
-    s->dropped = 0;
-}
-
-void world_load_float(world_float_t *w, int32_t n, const float *x, const float *y, const float *vx, const float *vy,
-    const float *rest_y) {
-    load_state(&w->s, n);
-    for (int32_t i = 0; i < w->s.n; i++) {
-        w->x[i] = x[i];
-        w->y[i] = y[i];
-        w->vx[i] = vx[i];
-        w->vy[i] = vy[i];
-        w->rest_y[i] = rest_y[i];
-    }
-}
-
-void world_load_fixed(world_fixed_t *w, int32_t n, const float *x, const float *y, const float *vx, const float *vy,
-    const float *rest_y) {
-    load_state(&w->s, n);
-    for (int32_t i = 0; i < w->s.n; i++) {
-        w->x[i] = to_q(x[i]);
-        w->y[i] = to_q(y[i]);
-        w->vx[i] = to_q(vx[i]);
-        w->vy[i] = to_q(vy[i]);
-        w->rest_y[i] = to_q(rest_y[i]);
-    }
-}
-
-void world_step_float(world_float_t *w, int32_t steps, int32_t rate, float gravity, float restitution, float friction) {
-    world_state_t *s = &w->s;
-    float dt = 1.0f / (float)rate;
+void world_step(world_t *w, int32_t steps, float dt, float gravity, float restitution, float friction) {
+    float *x = X(w), *y = Y(w), *vx = VX(w), *vy = VY(w), *rest_y = REST_Y(w);
+    uint8_t *asleep = ASLEEP(w);
     float rest_speed = 1.5f * gravity * dt;  // fall_bodies' rest speed
-    clear_events(s);
+    w->n_events = 0;
+    w->dropped = 0;
     for (int32_t k = 0; k < steps; k++) {
-        for (int32_t i = 0; i < s->n; i++) {
-            if (s->asleep[i]) {
+        for (int32_t i = 0; i < w->cap; i++) {
+            if (asleep[i]) {
                 continue;
             }
-            s->awake_steps++;
-            w->vy[i] += gravity * dt;
-            w->x[i] += w->vx[i] * dt;
-            w->y[i] += w->vy[i] * dt;
-            if (w->y[i] >= w->rest_y[i]) {  // through the plane in this step: back onto it
-                w->y[i] = w->rest_y[i];
-                float v = w->vy[i];
+            vy[i] += gravity * dt;
+            x[i] += vx[i] * dt;
+            y[i] += vy[i] * dt;
+            if (y[i] >= rest_y[i]) {  // through the plane in this step: back onto it, so nothing tunnels
+                y[i] = rest_y[i];
+                float v = vy[i];
                 if (v < rest_speed) {  // too slow to leave the plane again: it rests
-                    w->vy[i] = 0.0f;
-                    w->vx[i] = 0.0f;
-                    s->asleep[i] = 1;
-                    add_event(s, i, WORLD_EVENT_SLEEP, 0);
+                    vy[i] = 0.0f;
+                    vx[i] = 0.0f;
+                    asleep[i] = 1;
+                    add_event(w, i, WORLD_EVENT_SLEEP, 0);
                 } else {
-                    add_event(s, i, WORLD_EVENT_HIT, (int32_t)v);
-                    w->vy[i] = -v * restitution;
-                    w->vx[i] *= friction;
+                    add_event(w, i, WORLD_EVENT_HIT, (int32_t)v);
+                    vy[i] = -v * restitution;
+                    vx[i] *= friction;
                 }
             }
         }
     }
 }
 
-void world_step_fixed(world_fixed_t *w, int32_t steps, int32_t rate, float gravity, float restitution, float friction) {
-    world_state_t *s = &w->s;
-    int32_t g = to_q(gravity);
-    int32_t g_step = g / rate;  // px/s gained per step: exact for 2000 / 100
-    int32_t rest_speed = (int32_t)(((int64_t)3 * g) / (2 * rate));  // 1.5 * gravity / rate
-    int32_t rest_q = to_q(restitution), friction_q = to_q(friction);
-    clear_events(s);
-    for (int32_t k = 0; k < steps; k++) {
-        for (int32_t i = 0; i < s->n; i++) {
-            if (s->asleep[i]) {
-                continue;
-            }
-            s->awake_steps++;
-            w->vy[i] += g_step;
-            w->x[i] += w->vx[i] / rate;
-            w->y[i] += w->vy[i] / rate;
-            if (w->y[i] >= w->rest_y[i]) {
-                w->y[i] = w->rest_y[i];
-                int32_t v = w->vy[i];
-                if (v < rest_speed) {
-                    w->vy[i] = 0;
-                    w->vx[i] = 0;
-                    s->asleep[i] = 1;
-                    add_event(s, i, WORLD_EVENT_SLEEP, 0);
-                } else {
-                    add_event(s, i, WORLD_EVENT_HIT, v / Q_ONE);
-                    w->vy[i] = -q_mul(v, rest_q);
-                    w->vx[i] = q_mul(w->vx[i], friction_q);
-                }
-            }
-        }
+int32_t world_read(const world_t *w, int16_t *out) {
+    const float *x = X(w), *y = Y(w);
+    const uint8_t *asleep = ASLEEP(w);
+    for (int32_t i = 0; i < w->cap; i++) {
+        out[3 * i] = (int16_t)x[i];
+        out[3 * i + 1] = (int16_t)y[i];
+        out[3 * i + 2] = asleep[i];
     }
+    return w->cap;
 }
 
-void world_read_y_float(const world_float_t *w, float *out) {
-    memcpy(out, w->y, (size_t)w->s.n * sizeof(float));
-}
-
-void world_read_y_fixed(const world_fixed_t *w, float *out) {
-    for (int32_t i = 0; i < w->s.n; i++) {
-        out[i] = (float)w->y[i] / (float)Q_ONE;
-    }
-}
-
-int32_t world_spawn_float(world_float_t *w, int32_t i, float x, float y, float vx, float vy, float rest_y) {
-    world_state_t *s = &w->s;
-    if (i < 0 || i >= WORLD_MAX_BODIES) {
-        return 0;
-    }
-    for (int32_t k = s->n; k < i; k++) {  // skipped over: at rest at 0, so a step moves none of them
-        w->x[k] = w->y[k] = w->vx[k] = w->vy[k] = w->rest_y[k] = 0.0f;
-        s->asleep[k] = 1;
-    }
-    if (i >= s->n) {
-        s->n = i + 1;
-    }
-    w->x[i] = x;
-    w->y[i] = y;
-    w->vx[i] = vx;
-    w->vy[i] = vy;
-    w->rest_y[i] = rest_y;
-    s->asleep[i] = 0;
-    return 1;
-}
-
-void world_read_float(const world_float_t *w, int16_t *out) {
-    for (int32_t i = 0; i < w->s.n; i++) {
-        out[3 * i] = (int16_t)w->x[i];
-        out[3 * i + 1] = (int16_t)w->y[i];
-        out[3 * i + 2] = w->s.asleep[i];
-    }
-}
-
-int32_t world_drain(const world_state_t *s, int32_t *out, int32_t n) {
-    int32_t m = n < s->n_events ? n : s->n_events;
+int32_t world_drain(const world_t *w, int32_t *out, int32_t room) {
+    int32_t m = room < w->n_events ? room : w->n_events;
     for (int32_t k = 0; k < m; k++) {
-        out[3 * k] = s->events[k].id;
-        out[3 * k + 1] = s->events[k].kind;
-        out[3 * k + 2] = s->events[k].speed;
+        out[3 * k] = w->events[k].id;
+        out[3 * k + 1] = w->events[k].kind;
+        out[3 * k + 2] = w->events[k].speed;
     }
     return m < 0 ? 0 : m;
-}
-
-size_t world_float_size(void) {
-    return sizeof(world_float_t);
-}
-
-size_t world_fixed_size(void) {
-    return sizeof(world_fixed_t);
 }

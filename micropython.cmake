@@ -1,4 +1,4 @@
-# The engine module: the world (P589 probe, throwaway) and the fire (P595, MVP) in engine/core, and their MicroPython
+# The engine module: the world (P590, engine.Bodies) and the fire (P595, HeatField) in engine/core, and their MicroPython
 # binding. The binding draws into s3lcd's frame, so it reads s3lcd's header.
 add_library(usermod_engine INTERFACE)
 
