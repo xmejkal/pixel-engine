@@ -17,7 +17,7 @@ DT, SUBSTEPS, GRAVITY, DAMPING, HIT_MIN = 0.01, 4, 2000.0, 0.98, 60.0  # balls.p
 PHYSICS = (SUBSTEPS, DT, GRAVITY, DAMPING, HIT_MIN)
 OVERLAP_PX = 1.5  # the pile's bar at a step boundary (the plan's round 2 simulation: 0.74 to 1.08 px at 4 substeps)
 REST_SPEED = 20.0  # px/s: the settled pile's mean speed stays under this
-MATERIAL = (0.5, 0.5, 100.0)  # balls.py's FRICTION, RESTITUTION, RESTITUTION_THRESHOLD
+MATERIAL = (0.5, 0.7, 100.0)  # balls.py's FRICTION, RESTITUTION, RESTITUTION_THRESHOLD
 POUR, MAX = 25, 300
 
 
@@ -237,7 +237,7 @@ class MaterialTest(unittest.TestCase):
         balls = CBalls(1)
         balls.set_material(*MATERIAL)
         balls.spawn(160.0, H - 4 - 40.0, 0.0, 0.0, 4, 1)  # 40 px up: it lands at about 350 px/s
-        self.assertTrue(5.0 <= self.rise_after_landing(balls, 0) <= 15.0)  # 0.5 x 350 px/s rises about 7 px
+        self.assertTrue(8.0 <= self.rise_after_landing(balls, 0) <= 20.0)  # 0.7 x 350 px/s rises about 14 px, less the damping
         slow = CBalls(1)
         slow.set_material(*MATERIAL)
         slow.spawn(160.0, H - 4 - 1.0, 0.0, 0.0, 4, 1)  # 1 px up: about 60 px/s, under the 100 px/s threshold
@@ -246,6 +246,7 @@ class MaterialTest(unittest.TestCase):
 
     def test_a_ball_bounces_off_a_resting_ball_as_off_the_floor(self):
         """Any radius on any radius: the upper ball leaves at restitution x its closing speed, within 20 %."""
+        restitution = MATERIAL[1]
         for top, low in ((3, 5), (4, 4), (5, 3), (2, 5)):
             balls = CBalls(2)
             balls.set_material(*MATERIAL)
@@ -259,7 +260,8 @@ class MaterialTest(unittest.TestCase):
                 ys.append(balls.xy()[1][1])
                 closing = closing or next((speed for i, _, speed in events(balls) if i == 0), None)
             leaving = max(a - b for a, b in zip(ys, ys[1:])) / DT
-            self.assertTrue(0.4 * closing <= leaving <= 0.6 * closing, (top, low, closing, leaving))
+            self.assertTrue(0.8 * restitution * closing <= leaving <= 1.2 * restitution * closing,
+                            (top, low, closing, leaving))
 
     def test_friction_stops_a_sliding_ball(self):
         slid = {}
