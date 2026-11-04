@@ -16,6 +16,18 @@
 #define R(b) ((uint8_t *)(VY(b) + (b)->cap))
 #define COLOUR(b) (R(b) + (b)->cap)
 
+// The arrays a substep works on, found once a substep: each macro above calls grid_bytes in grid.c, which the compiler
+// cannot inline, and a call per array read made a substep 2.85 ms for 300 balls on the board (run97).
+typedef struct {
+    float *x, *y, *px, *py, *vx, *vy;
+    const uint8_t *r;
+} view_t;
+
+static view_t view_of(fx_balls_t *b) {
+    view_t v = {X(b), Y(b), PX(b), PY(b), VX(b), VY(b), R(b)};
+    return v;
+}
+
 size_t fx_balls_bytes(int32_t cap) {
     return sizeof(fx_balls_t) + grid_bytes(FX_BALLS_COLS, FX_BALLS_ROWS, cap)
         + (6 * sizeof(float) + 2 * sizeof(uint8_t)) * (size_t)cap;
@@ -55,9 +67,9 @@ void fx_balls_clear(fx_balls_t *b) {
 }
 
 // Push balls i and j apart when they overlap; in the first pass, a hit when they close at hit_min or more.
-static void contact(fx_balls_t *b, int32_t i, int32_t j, int32_t pass, float hit_min) {
-    float *x = X(b), *y = Y(b);
-    const uint8_t *r = R(b);
+static void contact(fx_balls_t *b, const view_t *v, int32_t i, int32_t j, int32_t pass, float hit_min) {
+    float *x = v->x, *y = v->y;
+    const uint8_t *r = v->r;
     float dx = x[j] - x[i], dy = y[j] - y[i], rr = (float)(r[i] + r[j]);
     float d2 = dx * dx + dy * dy;
     if (d2 >= rr * rr) {
@@ -75,7 +87,7 @@ static void contact(fx_balls_t *b, int32_t i, int32_t j, int32_t pass, float hit
     x[j] += nx * wj;
     y[j] += ny * wj;
     if (pass == 0) {
-        const float *vx = VX(b), *vy = VY(b);
+        const float *vx = v->vx, *vy = v->vy;
         float closing = (vx[i] - vx[j]) * nx + (vy[i] - vy[j]) * ny;
         if (closing >= hit_min) {
             events_add(&b->events, i, EVENT_HIT, (int32_t)closing);
@@ -86,19 +98,19 @@ static void contact(fx_balls_t *b, int32_t i, int32_t j, int32_t pass, float hit
 // Ball i back inside the walls, its move into a wall gone (px or py onto it, so the next velocity has none of it:
 // else a landing fired a second hit from the move that the floor cut); in the first pass, a hit when it ran into one
 // at hit_min or more.
-static void walls(fx_balls_t *b, int32_t i, int32_t pass, float hit_min) {
-    float *x = X(b), *y = Y(b), r = (float)R(b)[i];
+static void walls(fx_balls_t *b, const view_t *v, int32_t i, int32_t pass, float hit_min) {
+    float *x = v->x, *y = v->y, r = (float)v->r[i];
     float speed = -1.0f;  // under any hit_min while no wall is touched
     if (x[i] < r) {
-        x[i] = PX(b)[i] = r;
-        speed = -VX(b)[i];
+        x[i] = v->px[i] = r;
+        speed = -v->vx[i];
     } else if (x[i] > FX_BALLS_W - r) {
-        x[i] = PX(b)[i] = FX_BALLS_W - r;
-        speed = VX(b)[i];
+        x[i] = v->px[i] = FX_BALLS_W - r;
+        speed = v->vx[i];
     }
     if (y[i] > FX_BALLS_H - r) {
-        y[i] = PY(b)[i] = FX_BALLS_H - r;
-        speed = VY(b)[i] > speed ? VY(b)[i] : speed;
+        y[i] = v->py[i] = FX_BALLS_H - r;
+        speed = v->vy[i] > speed ? v->vy[i] : speed;
     }
     if (pass == 0 && speed >= hit_min && speed >= 0.0f) {
         events_add(&b->events, i, EVENT_HIT, (int32_t)speed);
@@ -107,7 +119,8 @@ static void walls(fx_balls_t *b, int32_t i, int32_t pass, float hit_min) {
 
 static void substep(fx_balls_t *b, float dt, float gravity, float damping, float hit_min) {
     int32_t n = b->n;
-    float *x = X(b), *y = Y(b), *px = PX(b), *py = PY(b), *vx = VX(b), *vy = VY(b);
+    view_t v = view_of(b);
+    float *x = v.x, *y = v.y, *px = v.px, *py = v.py, *vx = v.vx, *vy = v.vy;
     grid_t *g = GRID(b);
     for (int32_t i = 0; i < n; i++) {
         vy[i] += gravity * dt;
@@ -127,12 +140,12 @@ static void substep(fx_balls_t *b, float dt, float gravity, float damping, float
                     int32_t m = grid_cell(g, cx + dx, cy + dy, &items);
                     for (int32_t k = 0; k < m; k++) {
                         if (items[k] > i) {  // each pair once, from its lower index
-                            contact(b, i, items[k], pass, hit_min);
+                            contact(b, &v, i, items[k], pass, hit_min);
                         }
                     }
                 }
             }
-            walls(b, i, pass, hit_min);
+            walls(b, &v, i, pass, hit_min);
         }
     }
     float inv_dt = damping / dt;

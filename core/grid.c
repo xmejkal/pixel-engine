@@ -20,7 +20,10 @@ void grid_init(grid_t *g, int32_t cols, int32_t rows, int32_t cell_px, int32_t c
 }
 
 void grid_locate(const grid_t *g, float x, float y, int32_t *cx, int32_t *cy) {
-    int32_t c = (int32_t)(x / (float)g->cell_px), r = (int32_t)(y / (float)g->cell_px);
+    // An int division, in hardware on the S3: float division is a library call there (__divsf3), and two per call made
+    // most of a substep's 2.6 ms for 300 balls (run97b). It finds the same cell as the float one: for x >= 0, (int)x / c
+    // is floor(x / c), and a negative x clamps to column 0 either way.
+    int32_t c = (int32_t)x / g->cell_px, r = (int32_t)y / g->cell_px;
     *cx = c < 0 ? 0 : c >= g->cols ? g->cols - 1 : c;
     *cy = r < 0 ? 0 : r >= g->rows ? g->rows - 1 : r;
 }
