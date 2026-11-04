@@ -19,10 +19,15 @@ void grid_init(grid_t *g, int32_t cols, int32_t rows, int32_t cell_px, int32_t c
     g->cap = cap;
 }
 
+void grid_locate(const grid_t *g, float x, float y, int32_t *cx, int32_t *cy) {
+    int32_t c = (int32_t)(x / (float)g->cell_px), r = (int32_t)(y / (float)g->cell_px);
+    *cx = c < 0 ? 0 : c >= g->cols ? g->cols - 1 : c;
+    *cy = r < 0 ? 0 : r >= g->rows ? g->rows - 1 : r;
+}
+
 static int32_t cell_of(const grid_t *g, float x, float y) {
-    int32_t cx = (int32_t)(x / (float)g->cell_px), cy = (int32_t)(y / (float)g->cell_px);
-    cx = cx < 0 ? 0 : cx >= g->cols ? g->cols - 1 : cx;
-    cy = cy < 0 ? 0 : cy >= g->rows ? g->rows - 1 : cy;
+    int32_t cx, cy;
+    grid_locate(g, x, y, &cx, &cy);
     return cy * g->cols + cx;
 }
 

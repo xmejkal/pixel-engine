@@ -22,8 +22,11 @@ size_t grid_bytes(int32_t cols, int32_t rows, int32_t cap);
 // An empty grid. g is grid_bytes(cols, rows, cap) long; the caller keeps cols, rows and cap at 1 or more.
 void grid_init(grid_t *g, int32_t cols, int32_t rows, int32_t cell_px, int32_t cap);
 
-// Sort the n items (n at most cap) in: item i goes into the cell of (x[i], y[i]), its column x / cell_px truncated
-// and clamped to 0 to cols - 1, its row the same from y. The last build is forgotten.
+// The cell of a point: its column x / cell_px truncated and clamped to 0 to cols - 1, its row the same from y.
+void grid_locate(const grid_t *g, float x, float y, int32_t *cx, int32_t *cy);
+
+// Sort the n items (n at most cap) in: item i goes into grid_locate's cell of (x[i], y[i]). The last build is
+// forgotten.
 void grid_build(grid_t *g, const float *x, const float *y, int32_t n);
 
 // Cell (cx, cy)'s items: *items points at the first, the count comes back; 0 for a cell outside the grid.

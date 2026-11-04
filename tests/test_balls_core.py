@@ -6,11 +6,190 @@ import os
 import random
 import sys
 import unittest
+from array import array
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from balls_lib import HAVE_CLANG, Grid  # noqa: E402
+from balls_lib import COLOURS, H, HAVE_CLANG, HIT, PANEL_H, PANEL_W, W, CBalls, Grid  # noqa: E402
+
+DT, SUBSTEPS, GRAVITY, DAMPING, HIT_MIN = 0.01, 4, 2000.0, 0.98, 60.0  # balls.py's feel numbers (A7's gravity)
+PHYSICS = (SUBSTEPS, DT, GRAVITY, DAMPING, HIT_MIN)
+OVERLAP_PX = 1.5  # the pile's bar at a step boundary (the plan's round 2 simulation: 0.74 to 1.08 px at 4 substeps)
+REST_SPEED = 20.0  # px/s: the settled pile's mean speed stays under this
+POUR, MAX = 25, 300
+
+
+class Tft:
+    """The s3lcd display's frame."""
+
+    def __init__(self):
+        self.frame = bytearray(PANEL_W * PANEL_H * 2)
+
+
+def pour(balls, rng, colour, n=POUR):
+    """n balls across the top, as balls.py pours them."""
+    for _ in range(n):
+        r = rng.randrange(2, 6)
+        balls.spawn(rng.uniform(r, W - r), -r - rng.uniform(0, 40), 0.0, 0.0, r, colour)
+
+
+def run(balls, steps):
+    """steps steps, in calls of at most 64."""
+    for _ in range(steps // 64):
+        balls.step(64, *PHYSICS)
+    balls.step(steps % 64, *PHYSICS)
+
+
+def pile(seconds=4.0, pours=12):
+    """pours pours a second apart, then seconds of settling: the balls."""
+    rng, balls = random.Random(598), CBalls(MAX)
+    for k in range(pours):
+        pour(balls, rng, k % COLOURS)
+        run(balls, 100)
+    run(balls, int(seconds * 100))
+    return balls
+
+
+def radii(balls):
+    out = array("h", [0] * (3 * balls.n))
+    balls.read(out)
+    return [out[3 * i + 2] for i in range(balls.count)]
+
+
+def worst_overlap(balls):
+    """The deepest overlap of any pair, in px."""
+    xs, ys = balls.xy()
+    rs, worst = radii(balls), 0.0
+    for i in range(len(xs)):
+        for j in range(i + 1, len(xs)):
+            d = ((xs[i] - xs[j]) ** 2 + (ys[i] - ys[j]) ** 2) ** 0.5
+            worst = max(worst, rs[i] + rs[j] - d)
+    return worst
+
+
+def events(balls):
+    out = array("i", [0] * (3 * 64))
+    return [tuple(out[3 * k:3 * k + 3]) for k in range(balls.drain(out))]
+
+
+@unittest.skipUnless(HAVE_CLANG, "clang is missing: engine/core/fx_balls.c is not built")
+class BallsCoreTest(unittest.TestCase):
+    def test_a_ball_falls_hits_the_floor_and_rests_on_it(self):
+        balls = CBalls(4)
+        self.assertEqual(0, balls.spawn(160.0, 100.0, 0.0, 0.0, 4, 1))
+        hits = []
+        for _ in range(100):  # 1 s
+            balls.step(1, *PHYSICS)
+            hits += events(balls)
+        xs, ys = balls.xy()
+        self.assertAlmostEqual(160.0, xs[0], places=3)
+        self.assertAlmostEqual(H - 4, ys[0], delta=0.05)
+        self.assertEqual(1, balls.count)
+        self.assertTrue(hits and all(kind == HIT and speed >= HIT_MIN for _, kind, speed in hits), hits)
+        self.assertEqual(0, hits[0][0])
+
+    def test_the_settled_pile_overlaps_under_the_bar_and_rests(self):
+        balls = pile()
+        self.assertEqual(MAX, balls.count)
+        self.assertLessEqual(worst_overlap(balls), OVERLAP_PX)
+        x0, y0 = balls.xy()
+        balls.step(1, *PHYSICS)
+        x1, y1 = balls.xy()
+        speed = sum(((a - b) ** 2 + (c - d) ** 2) ** 0.5 for a, b, c, d in zip(x1, x0, y1, y0)) / MAX / DT
+        self.assertLess(speed, REST_SPEED)
+        self.assertEqual([], events(balls))  # a resting pile fires no hit
+        xs, ys = balls.xy()
+        rs = radii(balls)
+        self.assertTrue(all(r <= x <= W - r and y <= H - r for x, y, r in zip(xs, ys, rs)))
+
+    def test_a_60_s_pour_passes_no_ball_through_another_or_a_wall(self):
+        """A7: 60 s at 2,000 px/s2, 12 pours to 300 balls, read after every substep: no touching pair swaps sides
+        (its relative vector turns by more than 90 degrees in one substep), and no ball leaves the box."""
+        rng, balls, rs, reach = random.Random(7), CBalls(MAX), [], 10.5  # reach: two touching centres, plus a margin
+        last = {}
+        for k in range(60 * 100 * SUBSTEPS):
+            if k % (5 * 100 * SUBSTEPS) == 0 and balls.count < MAX:
+                pour(balls, rng, 1)
+                rs = radii(balls)
+            balls.step(1, 1, DT / SUBSTEPS, GRAVITY, DAMPING, HIT_MIN)
+            xs, ys = balls.xy()
+            n = len(xs)
+            for i in range(n):
+                self.assertTrue(rs[i] - 1e-3 <= xs[i] <= W - rs[i] + 1e-3 and ys[i] <= H - rs[i] + 1e-3, (k, i))
+            order, touching = sorted(range(n), key=xs.__getitem__), {}
+            for a in range(n):  # a sweep along x: each pair within reach once
+                i, xi = order[a], xs[order[a]]
+                for b in range(a + 1, n):
+                    j = order[b]
+                    dx = xs[j] - xi
+                    if dx > reach:
+                        break
+                    dy = ys[j] - ys[i]
+                    if dx * dx + dy * dy <= (rs[i] + rs[j] + 0.5) ** 2:
+                        lo, hi = (i, j) if i < j else (j, i)
+                        now, was = (xs[hi] - xs[lo], ys[hi] - ys[lo]), last.get((lo, hi))
+                        touching[lo, hi] = now
+                        self.assertFalse(was and was[0] * now[0] + was[1] * now[1] < 0, (k, lo, hi, was, now))
+            last = touching
+        self.assertEqual(MAX, balls.count)
+
+    def test_a_full_pit_refuses_a_spawn_and_clear_empties_it(self):
+        balls = CBalls(2)
+        self.assertEqual((0, 1, -1), (balls.spawn(10.0, 10.0, 0.0, 0.0, 2, 0), balls.spawn(20.0, 10.0, 0.0, 0.0, 2, 0),
+                                      balls.spawn(30.0, 10.0, 0.0, 0.0, 2, 0)))
+        balls.clear()
+        self.assertEqual(0, balls.count)
+        self.assertEqual(0, balls.spawn(10.0, 10.0, 0.0, 0.0, 2, 0))
+
+    def test_events_carry_the_speed_and_the_rest_only_count_in_dropped(self):
+        balls = CBalls(80)
+        for i in range(70):  # 70 balls of r 2 a hair apart, 1 px over the floor, falling at 500 px/s: 70 hits in one call
+            balls.spawn(3.0 + 4.5 * i, H - 3.0, 0.0, 500.0, 2, 0)
+        balls.step(1, *PHYSICS)
+        hits = events(balls)
+        self.assertEqual(64, len(hits))
+        self.assertEqual(6, balls.dropped)
+        self.assertTrue(all(kind == HIT and 480 <= speed <= 520 for _, kind, speed in hits), hits)
+        self.assertEqual(sorted(i for i, _, _ in hits), [i for i, _, _ in hits])
+        balls.step(0, *PHYSICS)  # a call clears the last call's events, also with 0 steps
+        self.assertEqual(([], 0), (events(balls), balls.dropped))
+
+    def test_the_binding_s_checks(self):
+        with self.assertRaises(ValueError):
+            CBalls(0)
+        with self.assertRaises(ValueError):
+            CBalls(321)
+        balls = CBalls(1)
+        for bad in ((10.0, 10.0, 0.0, 0.0, 1, 0), (10.0, 10.0, 0.0, 0.0, 6, 0), (10.0, 10.0, 0.0, 0.0, 2, COLOURS)):
+            with self.assertRaises(ValueError):
+                balls.spawn(*bad)
+        with self.assertRaises(ValueError):
+            balls.step(65, *PHYSICS)
+        with self.assertRaises(ValueError):
+            balls.step(1, 9, DT, GRAVITY, DAMPING, HIT_MIN)
+        with self.assertRaises(ValueError):
+            balls.read(array("h", [0, 0]))
+        with self.assertRaises(ValueError):
+            balls.drain(array("h", [0]))
+
+    def test_draw_fills_the_panel_and_paints_each_ball_at_its_mapped_place(self):
+        """Game (x, y) is panel (y, PANEL_H - 1 - x), lcd.TftCanvas.fill's map at ORIENTATION 0."""
+        balls, tft = CBalls(2), Tft()
+        palette = array("H", [0x1000 + 0x111 * k for k in range(COLOURS)])
+        balls.spawn(100.0, 50.0, 0.0, 0.0, 3, 2)
+        balls.draw(tft, palette, 0x00FF)
+
+        def panel(gx, gy):
+            k = 2 * ((PANEL_H - 1 - gx) * PANEL_W + gy)
+            return tft.frame[k] | tft.frame[k + 1] << 8  # as the C wrote it, uint16 in the Mac's byte order
+
+        self.assertEqual(palette[2], panel(100, 50))
+        self.assertEqual((palette[2], palette[2], palette[2], palette[2]),
+                         (panel(103, 50), panel(97, 50), panel(100, 53), panel(100, 47)))
+        self.assertEqual((0x00FF, 0x00FF, 0x00FF), (panel(104, 50), panel(100, 54), panel(0, 0)))
+        self.assertEqual(0x00FF, panel(103, 53))  # the corner outside the disc
+        self.assertEqual(palette[2], panel(102, 52))  # 2 * 2 + 2 * 2 = 8 <= 9 + 3: inside
 
 
 @unittest.skipUnless(HAVE_CLANG, "clang is missing: engine/core/grid.c is not built")
