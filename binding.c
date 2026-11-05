@@ -1,9 +1,9 @@
-// The engine module. engine.Bodies (P590) is the world of engine/core/world.c as a native type: C steps the falling
+// The engine module. engine.Bodies (P590) is the world of core/world.c as a native type: C steps the falling
 // bodies and keeps the facts of a step as events, which Python drains once a frame (D11 to D13). Its twin is
-// games/motion.py's Bodies, with the same API. --- MVP (P590) ---
-// The HeatField part is P595's and is kept (D8): the fire of engine/core/fx_fire.c as a native type, drawn into the
+// pixel-games games/motion.py's Bodies, with the same API. --- MVP (P590) ---
+// The HeatField part is P595's and is kept (D8): the fire of core/fx_fire.c as a native type, drawn into the
 // s3lcd frame, opaque or blended (P603). --- MVP (P595) ---
-// engine.Balls (P598) is the circle solver of engine/core/fx_balls.c as a native type: balls that fall, knock and pile
+// engine.Balls (P598) is the circle solver of core/fx_balls.c as a native type: balls that fall, knock and pile
 // in a box, their hits as events, drawn into the s3lcd frame. --- MVP (P598) ---
 #include "py/runtime.h"
 
