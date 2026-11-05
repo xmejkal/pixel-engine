@@ -10,7 +10,8 @@
 
 #define FX_FIRE_MAX_SPOTS 16
 #define FX_FIRE_MAX_EMBERS 24
-// The cooling map's width and height, each a power of 2. 256 wide, so it never repeats across a field up to 256 wide
+// The cooling map's width and height, each a power of 2. 256 wide, so it never repeats across a field up to 256 wide (the
+// games' fields are 160); a wider field, up to the binding's 1,024, repeats it every 256 cells
 #define FX_FIRE_MAP_W 256
 #define FX_FIRE_MAP_H 32
 // --- MVP (P608) ---
