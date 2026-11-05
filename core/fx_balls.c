@@ -99,6 +99,7 @@ static float inv_sqrt(float x) {
 #define SHARE(a, b) ((float)((b) * (b)) / (float)((a) * (a) + (b) * (b)))
 #define SHARE_ROW(a) {SHARE(a, 2), SHARE(a, 3), SHARE(a, 4), SHARE(a, 5)}
 static const float share[4][4] = {SHARE_ROW(2), SHARE_ROW(3), SHARE_ROW(4), SHARE_ROW(5)};  // [ri - 2][rj - 2]
+_Static_assert(FX_BALLS_R_MIN == 2 && FX_BALLS_R_MAX == 5, "share[][] holds the radii 2 to 5");
 
 // A bounce for the substep's end, unless the list is full.
 static void bounce_add(fx_balls_t *b, int32_t i, int32_t j, float speed) {
