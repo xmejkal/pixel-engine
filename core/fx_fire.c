@@ -1,6 +1,6 @@
 // The fire (P595): see fx_fire.h. --- MVP (P595) ---
 #include "fx_fire.h"
-#include "blend565.h"  // s3lcd/src: the blend s3lcd uses, plain C (P603)
+#include "blend565.h"  // driver/src: the blend s3lcd uses, plain C (P603)
 
 #include <string.h>
 
