@@ -1,5 +1,5 @@
-"""engine/core/world.c on the Mac (P590): clang_lib builds it once, and CBodies stands in for engine.Bodies
-(engine/binding.c) through ctypes, with the binding's checks, so a test refuses what the board refuses. The build takes
+"""core/world.c on the Mac (P590): clang_lib builds it once, and CBodies stands in for engine.Bodies
+(binding.c) through ctypes, with the binding's checks, so a test refuses what the board refuses. The build takes
 no fused multiply-add (clang_lib.NO_FMA), which the twin's Python maths never does. --- MVP (P590) ---"""
 
 import ctypes

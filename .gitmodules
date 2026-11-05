@@ -1,0 +1,3 @@
+[submodule "driver"]
+	path = driver
+	url = https://github.com/xmejkal/s3lcd.git

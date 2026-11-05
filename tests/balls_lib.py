@@ -1,5 +1,5 @@
-"""engine/core/grid.c and fx_balls.c on the Mac (P598): clang_lib builds them once, and CBalls stands in for
-engine.Balls (engine/binding.c) through ctypes, with the binding's checks, so a test refuses what the board refuses.
+"""core/grid.c and fx_balls.c on the Mac (P598): clang_lib builds them once, and CBalls stands in for
+engine.Balls (binding.c) through ctypes, with the binding's checks, so a test refuses what the board refuses.
 The checks are written twice, here and in binding.c, and the tests see only this copy: a change to one changes the
 other.
 Grid is the Mac's own look at grid.c. --- MVP (P598) ---"""

@@ -1,4 +1,4 @@
-"""engine/core/grid.c and fx_balls.c (P598) on the Mac: tests/balls_lib.py builds them with clang and steps them
+"""core/grid.c and fx_balls.c (P598) on the Mac: tests/balls_lib.py builds them with clang and steps them
 through CBalls, the stand-in for engine.Balls. Run from the repository root: python3 -m unittest discover tests.
 --- MVP (P598) ---"""
 
@@ -75,7 +75,7 @@ def events(balls):
     return [tuple(out[3 * k:3 * k + 3]) for k in range(balls.drain(out))]
 
 
-@unittest.skipUnless(HAVE_CLANG, "clang is missing: engine/core/fx_balls.c is not built")
+@unittest.skipUnless(HAVE_CLANG, "clang is missing: core/fx_balls.c is not built")
 class BallsCoreTest(unittest.TestCase):
     def test_a_ball_falls_hits_the_floor_and_rests_on_it(self):
         balls = CBalls(4)
@@ -234,7 +234,7 @@ def free_velocity(balls):
     return [(b - a) / h for a, b in zip(x0, x1)], [(b - a) / h for a, b in zip(y0, y1)]
 
 
-@unittest.skipUnless(HAVE_CLANG, "clang is missing: engine/core/fx_balls.c is not built")
+@unittest.skipUnless(HAVE_CLANG, "clang is missing: core/fx_balls.c is not built")
 class MaterialTest(unittest.TestCase):
     """The material (P598, the PO 2026-11-04: "the balls really don't bounce"): friction and restitution."""
 
@@ -365,7 +365,7 @@ class MaterialTest(unittest.TestCase):
         self.assertEqual([], events(balls))
 
 
-@unittest.skipUnless(HAVE_CLANG, "clang is missing: engine/core/grid.c is not built")
+@unittest.skipUnless(HAVE_CLANG, "clang is missing: core/grid.c is not built")
 class GridTest(unittest.TestCase):
     COLS, ROWS, CELL = 32, 24, 10
 
