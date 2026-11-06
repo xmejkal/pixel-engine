@@ -19,13 +19,14 @@ static uint32_t xorshift32(uint32_t *state) {
 //   each spot in turn, one draw (its walk or jump), then the bottom row's cells left to right, one draw each (the
 //   flicker). Then, with sway 1, the rows from the top down, one draw per 16 cells from x = 0, 16, 32 and so on.
 //   With wind not 0, each row takes one draw first, before its sway draws (the wind's). Then, with embers not 0,
-//   one draw after the rows (the ember's).
+//   one draw after the rows (the ember's). Then, with wander not 0, one draw (the drift's, P647).
 // A spot's place is r % w. A spot's draw r: when its top 6 bits are 0 (1 in 64) it jumps to (r >> 8) % w, else it
 // walks r % 3 - 1 cells, clamped to the field. The flicker keeps heat * (128 + (r >> 25)) >> 8. The sway's draw gives
 // 2 bits per cell, the lowest first: 00 is -1, 01 and 10 are 0, 11 is +1. The wind's draw r shifts the row's read one
 // column against the wind when r & 255 is under |wind|. The ember's draw r starts one in the first free slot when
 // r & 255 is under embers: at the spot ((r >> 8) & 255) % spots (the column (r >> 8) % w with spots 0), vy
-// -(2 + ((r >> 16) & 3)) rows a step and vx ((r >> 18) & 127) - 64 in 1/256 of a cell, plus wind / 8.
+// -(2 + ((r >> 16) & 3)) rows a step and vx ((r >> 18) & 127) - 64 in 1/256 of a cell, plus wind / 8. The drift's
+// draw r changes its speed by (r % 3 - 1) * (wander / 8 + 1), clamped to +-wander.
 
 static void place_spots(fx_fire_t *f) {
     for (int32_t i = 0; i < FX_FIRE_MAX_SPOTS; i++) {
@@ -88,6 +89,7 @@ void fx_fire_init(fx_fire_t *f, uint8_t *heat, uint8_t *cooling, int32_t w, int3
     f->fade = 0;
     f->base = 1;
     f->filter = FX_FIRE_NEAREST;  // P608
+    f->bend = f->wander = f->tick = f->map_dx = f->drift_vx = 0;  // P647
     memset(f->ember_heat, 0, sizeof f->ember_heat);
     memset(heat, 0, (size_t)w * (size_t)h);
     make_cooling(f);
@@ -173,6 +175,34 @@ static void embers_step(fx_fire_t *f, int32_t wind) {
     }
 }
 
+// --- Later, not MVP: a prototype for the PO's pick (P647) ---
+// sin(2 pi i / 64) * 127, rounded
+static const int8_t SINE[64] = {
+    0, 12, 25, 37, 49, 60, 71, 81, 90, 98, 106, 112, 117, 122, 125, 126, 127, 126, 125, 122, 117, 112,
+    106, 98, 90, 81, 71, 60, 49, 37, 25, 12, 0, -12, -25, -37, -49, -60, -71, -81, -90, -98, -106, -112,
+    -117, -122, -125, -126, -127, -126, -125, -122, -117, -112, -106, -98, -90, -81, -71, -60, -49, -37, -25, -12};
+
+void fx_fire_set_flow(fx_fire_t *f, int32_t bend, int32_t wander) {
+    f->bend = bend;
+    f->wander = wander;
+    f->drift_vx = f->drift_vx > wander ? wander : f->drift_vx < -wander ? -wander : f->drift_vx;
+}
+
+// The bend's sideways offset D of row y at this tick, in cells: a sine wave that travels up, so a crest at row y now
+// is at row y - 1 a little later.
+static int32_t bend_at(const fx_fire_t *f, int32_t y) {
+    int32_t turn = y * 1024 / FX_FIRE_BEND_ROWS + f->tick * 1024 / FX_FIRE_BEND_STEPS;  // in 1/1024 of a wave
+    return (f->bend * SINE[(turn >> 4) & 63] + 64) >> 7;
+}
+
+// The wander's drift: one draw walks its speed, then the maps move by it.
+static void wander_step(fx_fire_t *f) {
+    uint32_t r = xorshift32(&f->rng);
+    int32_t v = f->drift_vx + ((int32_t)(r % 3) - 1) * (f->wander / 8 + 1);
+    f->drift_vx = v > f->wander ? f->wander : v < -f->wander ? -f->wander : v;
+    f->map_dx = (f->map_dx + f->drift_vx) & 0xFFFF;
+}
+
 static inline uint32_t cell(const uint8_t *row, int32_t x, int32_t w) {  // 0 outside the field
     return (uint32_t)x < (uint32_t)w ? row[x] : 0;
 }
@@ -206,6 +236,18 @@ void fx_fire_step(fx_fire_t *f, int32_t steps, int32_t wind) {
             uint32_t faded = (((up + 1) * fade) >> 4) - ((up * fade) >> 4);  // fade / 16 a row, in whole units
             int32_t shift = gust && (xorshift32(&f->rng) & 255) < gust ? against : 0;
             uint32_t bits = 0;
+            // P647: the flow. d[k] shifts the heat read k rows below; cool_x and fast_x shift the two maps' columns
+            int32_t d[4] = {0, 0, 0, 0}, cool_x = 0, fast_x = FX_FIRE_MAP_W / 2;
+            if (f->bend) {
+                int32_t at = bend_at(f, y);
+                for (int32_t k = 1; k < 4; k++) {
+                    d[k] = at - bend_at(f, y + k);
+                }
+                cool_x += at;
+                fast_x += at;
+            }
+            cool_x += f->map_dx >> 8;
+            fast_x -= f->map_dx >> 8;
             for (int32_t x = 0; x < w; x++) {
                 int32_t c = x + shift;  // the column read below, shifted by the wind and the sway
                 if (f->sway) {
@@ -216,22 +258,29 @@ void fx_fire_step(fx_fire_t *f, int32_t steps, int32_t wind) {
                     bits >>= 2;
                 }
                 const uint8_t *near = below, *far = below2;  // a fast cell reads one row further down
-                if (fast && fast[(x + FX_FIRE_MAP_W / 2) & (FX_FIRE_MAP_W - 1)] >= fast_at) {
+                int32_t cn = c + d[1], cf = c + d[2];
+                if (fast && fast[(x + fast_x) & (FX_FIRE_MAP_W - 1)] >= fast_at) {
                     near = below2;
                     far = below3;
+                    cn = c + d[2];
+                    cf = c + d[3];
                 }
-                uint32_t left = cell(near, c - 1, w), mid = cell(near, c, w), right = cell(near, c + 1, w);
-                uint32_t two = far ? cell(far, c, w) : 0;
+                uint32_t left = cell(near, cn - 1, w), mid = cell(near, cn, w), right = cell(near, cn + 1, w);
+                uint32_t two = far ? cell(far, cf, w) : 0;
                 uint32_t hot = left > mid ? left : mid;  // the hottest cell read
                 hot = right > hot ? right : hot;
                 hot = two > hot ? two : hot;
                 uint32_t sum = ((left + mid + right + two) * decay) >> 7;
                 sum = sum > hot ? hot : sum;  // never hotter than its source, so no decay runs away
-                uint32_t loss = ((cooling[x & (FX_FIRE_MAP_W - 1)] * cool) >> 8) + faded;
+                uint32_t loss = ((cooling[(x + cool_x) & (FX_FIRE_MAP_W - 1)] * cool) >> 8) + faded;
                 row[x] = (uint8_t)(sum > loss ? sum - loss : 0);
             }
         }
         embers_step(f, wind);
+        if (f->wander) {
+            wander_step(f);
+        }
+        f->tick = (f->tick + 1) % FX_FIRE_BEND_STEPS;  // one wave, so the phase never overflows
         f->map_row = (f->map_row + 1) & (FX_FIRE_MAP_H - 1);
         f->fast_map_row = (f->fast_map_row + 2) & (FX_FIRE_MAP_H - 1);
     }

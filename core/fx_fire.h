@@ -35,8 +35,8 @@ typedef struct {
     int32_t ember_heat[FX_FIRE_MAX_EMBERS];  // 0 is a free slot
     int32_t base;  // 1: the step makes the bottom row; 0: it clears it (P596)
     int32_t filter;  // FX_FIRE_NEAREST or FX_FIRE_LINEAR, see fx_fire_set_filter (P608)
-    int32_t bend, wander;  // the motion, see fx_fire_set_motion (P647)
-    int32_t tick;  // steps taken, the bend's time
+    int32_t bend, wander;  // the flow, see fx_fire_set_flow (P647)
+    int32_t tick;  // 0 to FX_FIRE_BEND_STEPS - 1: the bend's step within its wave
     int32_t map_dx;  // 0 to 65535: how far the maps drifted sideways, in 1/256 of a cell (the wander)
     int32_t drift_vx;  // -wander to wander: the drift's speed, in 1/256 of a cell a step
 } fx_fire_t;
@@ -103,14 +103,15 @@ void fx_fire_set_filter(fx_fire_t *f, int32_t filter);
 void fx_fire_scroll(fx_fire_t *f, int32_t dx);
 
 // --- Later, not MVP: a prototype for the PO's pick (P647) ---
-// The motion, two settings that add up, both 0 after init, each checked by the caller. bend 0 to 8 (domain warping,
-// iquilezles.org/articles/warp, written from the description): a sine wave of bend cells, FX_FIRE_BEND_ROWS rows
-// long, travels up a wave every FX_FIRE_BEND_STEPS steps. Row y reads both maps at column x + D(y) and the heat k rows
-// below at c + D(y) - D(y + k), so the cold gaps and the flames follow the bent path. wander 0 to 255 (texture
-// panning): the drift's speed walks at random within +-wander, in 1/256 of a cell a step, and moves the cooling map
-// one way and the fast map the other, so the gaps switch around and the fast patches cross them.
+// The flow: one sideways speed per row, which a fluid layer can replace later (P649). Two settings that add up, both 0
+// after init, each checked by the caller. bend 0 to 8 (domain warping, iquilezles.org/articles/warp, written from the
+// description): a sine wave of bend cells, FX_FIRE_BEND_ROWS rows long, travels up a wave every FX_FIRE_BEND_STEPS
+// steps. Row y reads both maps at column x + D(y) and the heat k rows below at c + D(y) - D(y + k), so the cold gaps
+// and the flames follow the bent path. wander 0 to 255 (texture panning): the drift's speed walks at random within
+// +-wander, in 1/256 of a cell a step, and moves the cooling map one way and the fast map the other, so the gaps
+// switch around and the fast patches cross them.
 #define FX_FIRE_BEND_ROWS 40
 #define FX_FIRE_BEND_STEPS 50
-void fx_fire_set_motion(fx_fire_t *f, int32_t bend, int32_t wander);
+void fx_fire_set_flow(fx_fire_t *f, int32_t bend, int32_t wander);
 
 #endif
