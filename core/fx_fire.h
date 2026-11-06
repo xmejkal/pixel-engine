@@ -104,14 +104,15 @@ void fx_fire_set_filter(fx_fire_t *f, int32_t filter);
 void fx_fire_scroll(fx_fire_t *f, int32_t dx);
 
 // --- Later, not MVP: a prototype for the PO's pick (P647) ---
-// The flow: one sideways speed per row, which a fluid layer can replace later (P649). Two settings that add up, both 0
-// after init, each checked by the caller. bend 0 to 8 (domain warping, iquilezles.org/articles/warp, written from the
-// description): a sine wave of bend cells, rows 1 to 256 rows long, travels up a wave every steps 1 to 1000 steps,
-// each stretch of width 1 to 256 columns at its own place in the wave (from the cooling map), so the flames sway out
-// of step. Init's shape is FX_FIRE_BEND_ROWS, FX_FIRE_BEND_STEPS and FX_FIRE_BEND_WIDTH. Row y reads both maps at column x + D(x, y) and the heat k rows below at c + D(x, y) - D(x, y + k), so the
-// cold gaps and the flames follow the bent path. wander 0 to 1023 (texture panning): the drift's speed walks at random within
-// +-wander, in 1/256 of a cell a step, and moves the cooling map one way and the fast map the other, so the gaps
-// switch around and the fast patches cross them.
+// The flow: a sideways shift of each cell's reads, which a fluid layer can replace later (P649). Two settings that
+// add up, both 0 after init, each checked by the caller. bend 0 to 8 (domain warping, iquilezles.org/articles/warp,
+// written from the description): a sine wave of bend cells, rows 1 to 256 rows long, travels up a wave every steps 1
+// to 1000 steps, each stretch of width 1 to 256 columns at its own place in the wave (from the cooling map), so the
+// flames sway out of step. Init's shape is FX_FIRE_BEND_ROWS, FX_FIRE_BEND_STEPS and FX_FIRE_BEND_WIDTH. Row y reads
+// both maps at column x + D(x, y) and the heat k rows below at c + D(x, y) - D(x, y + k), so the cold gaps and the
+// flames follow the bent path. wander 0 to 1023 (texture panning): the drift's speed walks at random within +-wander,
+// in 1/256 of a cell a step, and moves the cooling map one way and the fast map the other, so the gaps switch around
+// and the fast patches cross them.
 #define FX_FIRE_BEND_ROWS 40
 #define FX_FIRE_BEND_STEPS 50
 #define FX_FIRE_BEND_WIDTH 16
