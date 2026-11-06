@@ -283,6 +283,14 @@ void fx_fire_draw(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette) 
 void fx_fire_blend(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette, const uint8_t *alpha) {
     int32_t w = f->w, h = f->h, pw = 2 * h;
     if (f->filter == FX_FIRE_LINEAR) {  // --- MVP (P608) --- the heats of fx_fire_draw's LINEAR, each pixel blended
+        // --- MVP (P646) --- every heat below first_visible_heat has alpha 0 (256: every heat). A pixel's heat
+        // (3m + m' + 8) >> 4 stays below T = first_visible_heat while m and m' are at most 4T - 3, since
+        // (16T - 12 + 8) >> 4 = T - 1. So a cell whose up, m and down are all that small skips its two pixels' heats.
+        uint32_t first_visible_heat = 0;
+        while (first_visible_heat < 256 && alpha[first_visible_heat] == 0) {
+            first_visible_heat++;
+        }
+        uint32_t clear_limit = 4u * first_visible_heat;  // skip while the largest mix + 3 is at most this; 0 skips none
         for (int32_t py = 0; py < 2 * w; py++) {
             const uint8_t *col, *side;
             linear_columns(f, py, &col, &side);
@@ -290,12 +298,16 @@ void fx_fire_blend(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette,
             uint32_t m = 3u * col[0] + side[0], up = m;
             for (int32_t y = 0; y < h; y++, col += w, side += w) {
                 uint32_t down = y + 1 < h ? 3u * col[w] + side[w] : m;
-                uint32_t h0 = (3u * m + up + 8u) >> 4, h1 = (3u * m + down + 8u) >> 4;
-                if (alpha[h0] != 0) {  // a pixel of alpha 0 keeps what it holds, and skips the blend's cost
-                    out[2 * y] = alpha_blend_565(palette[h0], out[2 * y], alpha[h0]);
-                }
-                if (alpha[h1] != 0) {
-                    out[2 * y + 1] = alpha_blend_565(palette[h1], out[2 * y + 1], alpha[h1]);
+                uint32_t most = up > m ? up : m;
+                most = down > most ? down : most;
+                if (most + 3u > clear_limit) {
+                    uint32_t h0 = (3u * m + up + 8u) >> 4, h1 = (3u * m + down + 8u) >> 4;
+                    if (alpha[h0] != 0) {  // a pixel of alpha 0 keeps what it holds, and skips the blend's cost
+                        out[2 * y] = alpha_blend_565(palette[h0], out[2 * y], alpha[h0]);
+                    }
+                    if (alpha[h1] != 0) {
+                        out[2 * y + 1] = alpha_blend_565(palette[h1], out[2 * y + 1], alpha[h1]);
+                    }
                 }
                 up = m;
                 m = down;
