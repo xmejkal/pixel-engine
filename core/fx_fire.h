@@ -70,6 +70,7 @@ void fx_fire_draw(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette);
 // --- MVP (P603) ---
 // The same panel blended over what it holds (the picture mode, over the painted sky): each pixel becomes
 // alpha_blend_565(palette[heat], pixel, alpha[heat]) of driver/src/blend565.h. A cell of alpha 0 leaves its pixels.
+// LINEAR skips the heats of a cell whose neighbourhood is too cold for any alpha but 0, with the same output (P646).
 void fx_fire_blend(const fx_fire_t *f, uint16_t *panel, const uint16_t *palette, const uint8_t *alpha);
 
 // --- MVP (P596) ---
