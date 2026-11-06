@@ -90,6 +90,9 @@ void fx_fire_init(fx_fire_t *f, uint8_t *heat, uint8_t *cooling, int32_t w, int3
     f->base = 1;
     f->filter = FX_FIRE_NEAREST;  // P608
     f->bend = f->wander = f->tick = f->map_dx = f->drift_vx = 0;  // P647
+    f->bend_rows = FX_FIRE_BEND_ROWS;
+    f->bend_steps = FX_FIRE_BEND_STEPS;
+    f->bend_width = FX_FIRE_BEND_WIDTH;
     memset(f->ember_heat, 0, sizeof f->ember_heat);
     memset(heat, 0, (size_t)w * (size_t)h);
     make_cooling(f);
@@ -182,8 +185,12 @@ static const int8_t SINE[64] = {
     106, 98, 90, 81, 71, 60, 49, 37, 25, 12, 0, -12, -25, -37, -49, -60, -71, -81, -90, -98, -106, -112,
     -117, -122, -125, -126, -127, -126, -125, -122, -117, -112, -106, -98, -90, -81, -71, -60, -49, -37, -25, -12};
 
-void fx_fire_set_flow(fx_fire_t *f, int32_t bend, int32_t wander) {
+void fx_fire_set_flow(fx_fire_t *f, int32_t bend, int32_t rows, int32_t steps, int32_t width, int32_t wander) {
     f->bend = bend;
+    f->bend_rows = rows;
+    f->bend_steps = steps;
+    f->bend_width = width;
+    f->tick %= steps;
     f->wander = wander;
     f->drift_vx = f->drift_vx > wander ? wander : f->drift_vx < -wander ? -wander : f->drift_vx;
 }
@@ -191,14 +198,15 @@ void fx_fire_set_flow(fx_fire_t *f, int32_t bend, int32_t wander) {
 // The bend's wave at row y and this tick, in 1/1024 of a wave: it travels up, so a crest at row y now is at row y - 1
 // a little later.
 static int32_t bend_turn(const fx_fire_t *f, int32_t y) {
-    return y * 1024 / FX_FIRE_BEND_ROWS + f->tick * 1024 / FX_FIRE_BEND_STEPS;
+    return y * 1024 / f->bend_rows + f->tick * 1024 / f->bend_steps;
 }
 
-// A column's own place in the wave, 0 to 1020 of 1024: the cooling map's row 0 read every 16 columns and mixed
-// linearly between, so nearby flames sway together and flames further apart sway out of step.
+// A column's own place in the wave, 0 to 1020 of 1024: the cooling map's row 0 read every bend_width columns and
+// mixed linearly between, so nearby flames sway together and flames further apart sway out of step.
 static int32_t column_phase(const fx_fire_t *f, int32_t x) {
-    int32_t i = x >> 4, a = f->cooling[i & (FX_FIRE_MAP_W - 1)], b = f->cooling[(i + 1) & (FX_FIRE_MAP_W - 1)];
-    return (a * 16 + (b - a) * (x & 15)) >> 2;
+    int32_t n = f->bend_width, i = x / n, a = f->cooling[i & (FX_FIRE_MAP_W - 1)];
+    int32_t b = f->cooling[(i + 1) & (FX_FIRE_MAP_W - 1)];
+    return (a * n + (b - a) * (x % n)) * 4 / n;
 }
 
 // The bend's sideways offset D, in cells, at a place in the wave.
@@ -293,7 +301,7 @@ void fx_fire_step(fx_fire_t *f, int32_t steps, int32_t wind) {
         if (f->wander) {
             wander_step(f);
         }
-        f->tick = (f->tick + 1) % FX_FIRE_BEND_STEPS;  // one wave, so the phase never overflows
+        f->tick = (f->tick + 1) % f->bend_steps;  // one wave, so the phase never overflows
         f->map_row = (f->map_row + 1) & (FX_FIRE_MAP_H - 1);
         f->fast_map_row = (f->fast_map_row + 2) & (FX_FIRE_MAP_H - 1);
     }
