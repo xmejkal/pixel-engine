@@ -106,8 +106,9 @@ void fx_fire_scroll(fx_fire_t *f, int32_t dx);
 // The flow: one sideways speed per row, which a fluid layer can replace later (P649). Two settings that add up, both 0
 // after init, each checked by the caller. bend 0 to 8 (domain warping, iquilezles.org/articles/warp, written from the
 // description): a sine wave of bend cells, FX_FIRE_BEND_ROWS rows long, travels up a wave every FX_FIRE_BEND_STEPS
-// steps. Row y reads both maps at column x + D(y) and the heat k rows below at c + D(y) - D(y + k), so the cold gaps
-// and the flames follow the bent path. wander 0 to 255 (texture panning): the drift's speed walks at random within
+// steps, each stretch of about 16 columns at its own place in the wave (from the cooling map), so the flames sway out
+// of step. Row y reads both maps at column x + D(x, y) and the heat k rows below at c + D(x, y) - D(x, y + k), so the
+// cold gaps and the flames follow the bent path. wander 0 to 255 (texture panning): the drift's speed walks at random within
 // +-wander, in 1/256 of a cell a step, and moves the cooling map one way and the fast map the other, so the gaps
 // switch around and the fast patches cross them.
 #define FX_FIRE_BEND_ROWS 40

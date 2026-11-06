@@ -188,10 +188,21 @@ void fx_fire_set_flow(fx_fire_t *f, int32_t bend, int32_t wander) {
     f->drift_vx = f->drift_vx > wander ? wander : f->drift_vx < -wander ? -wander : f->drift_vx;
 }
 
-// The bend's sideways offset D of row y at this tick, in cells: a sine wave that travels up, so a crest at row y now
-// is at row y - 1 a little later.
-static int32_t bend_at(const fx_fire_t *f, int32_t y) {
-    int32_t turn = y * 1024 / FX_FIRE_BEND_ROWS + f->tick * 1024 / FX_FIRE_BEND_STEPS;  // in 1/1024 of a wave
+// The bend's wave at row y and this tick, in 1/1024 of a wave: it travels up, so a crest at row y now is at row y - 1
+// a little later.
+static int32_t bend_turn(const fx_fire_t *f, int32_t y) {
+    return y * 1024 / FX_FIRE_BEND_ROWS + f->tick * 1024 / FX_FIRE_BEND_STEPS;
+}
+
+// A column's own place in the wave, 0 to 1020 of 1024: the cooling map's row 0 read every 16 columns and mixed
+// linearly between, so nearby flames sway together and flames further apart sway out of step.
+static int32_t column_phase(const fx_fire_t *f, int32_t x) {
+    int32_t i = x >> 4, a = f->cooling[i & (FX_FIRE_MAP_W - 1)], b = f->cooling[(i + 1) & (FX_FIRE_MAP_W - 1)];
+    return (a * 16 + (b - a) * (x & 15)) >> 2;
+}
+
+// The bend's sideways offset D, in cells, at a place in the wave.
+static int32_t bend_at(const fx_fire_t *f, int32_t turn) {
     return (f->bend * SINE[(turn >> 4) & 63] + 64) >> 7;
 }
 
@@ -236,18 +247,12 @@ void fx_fire_step(fx_fire_t *f, int32_t steps, int32_t wind) {
             uint32_t faded = (((up + 1) * fade) >> 4) - ((up * fade) >> 4);  // fade / 16 a row, in whole units
             int32_t shift = gust && (xorshift32(&f->rng) & 255) < gust ? against : 0;
             uint32_t bits = 0;
-            // P647: the flow. d[k] shifts the heat read k rows below; cool_x and fast_x shift the two maps' columns
-            int32_t d[4] = {0, 0, 0, 0}, cool_x = 0, fast_x = FX_FIRE_MAP_W / 2;
-            if (f->bend) {
-                int32_t at = bend_at(f, y);
-                for (int32_t k = 1; k < 4; k++) {
-                    d[k] = at - bend_at(f, y + k);
-                }
-                cool_x += at;
-                fast_x += at;
+            // P647: the flow. The wander shifts the two maps' columns the same for the whole row; the bend's turn[k]
+            // is row y + k's place in the wave, before each column's own phase
+            int32_t cool_x = f->map_dx >> 8, fast_x = FX_FIRE_MAP_W / 2 - (f->map_dx >> 8), turn[4] = {0, 0, 0, 0};
+            for (int32_t k = 0; f->bend && k < 4; k++) {
+                turn[k] = bend_turn(f, y + k);
             }
-            cool_x += f->map_dx >> 8;
-            fast_x -= f->map_dx >> 8;
             for (int32_t x = 0; x < w; x++) {
                 int32_t c = x + shift;  // the column read below, shifted by the wind and the sway
                 if (f->sway) {
@@ -258,8 +263,16 @@ void fx_fire_step(fx_fire_t *f, int32_t steps, int32_t wind) {
                     bits >>= 2;
                 }
                 const uint8_t *near = below, *far = below2;  // a fast cell reads one row further down
+                int32_t d[4] = {0, 0, 0, 0};  // the bend: d[0] shifts the maps, d[k] the heat read k rows below
+                if (f->bend) {
+                    int32_t phase = column_phase(f, x);
+                    d[0] = bend_at(f, turn[0] + phase);
+                    for (int32_t k = 1; k < 4; k++) {
+                        d[k] = d[0] - bend_at(f, turn[k] + phase);
+                    }
+                }
                 int32_t cn = c + d[1], cf = c + d[2];
-                if (fast && fast[(x + fast_x) & (FX_FIRE_MAP_W - 1)] >= fast_at) {
+                if (fast && fast[(x + fast_x + d[0]) & (FX_FIRE_MAP_W - 1)] >= fast_at) {
                     near = below2;
                     far = below3;
                     cn = c + d[2];
@@ -272,7 +285,7 @@ void fx_fire_step(fx_fire_t *f, int32_t steps, int32_t wind) {
                 hot = two > hot ? two : hot;
                 uint32_t sum = ((left + mid + right + two) * decay) >> 7;
                 sum = sum > hot ? hot : sum;  // never hotter than its source, so no decay runs away
-                uint32_t loss = ((cooling[(x + cool_x) & (FX_FIRE_MAP_W - 1)] * cool) >> 8) + faded;
+                uint32_t loss = ((cooling[(x + cool_x + d[0]) & (FX_FIRE_MAP_W - 1)] * cool) >> 8) + faded;
                 row[x] = (uint8_t)(sum > loss ? sum - loss : 0);
             }
         }
