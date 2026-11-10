@@ -418,16 +418,22 @@ static int32_t heat_total(const uint8_t *heat, int32_t cells) {
     uint32_t total = 0, lanes = 0;
     int32_t words = ((uintptr_t)heat & 3) == 0 ? cells >> 2 : 0, k = 0;  // the field's own heap block is aligned
     const uint32_t *word = (const uint32_t *)heat;
-    for (int32_t i = 0; i < words; i++) {  // four cells a read: a memcpy here was a call per word (1.5 ms a call)
-        lanes += (word[i] & 0x00FF00FFu) + ((word[i] >> 8) & 0x00FF00FFu);
-        if (++k == 128) {
+    int32_t i = 0;
+    for (; i + 4 <= words; i += 4) {  // 16 cells a turn: a memcpy here was a call per word (1.5 ms a call)
+        uint32_t a = word[i], b = word[i + 1], c = word[i + 2], d = word[i + 3];
+        lanes += (a & 0x00FF00FFu) + ((a >> 8) & 0x00FF00FFu) + (b & 0x00FF00FFu) + ((b >> 8) & 0x00FF00FFu);
+        lanes += (c & 0x00FF00FFu) + ((c >> 8) & 0x00FF00FFu) + (d & 0x00FF00FFu) + ((d >> 8) & 0x00FF00FFu);
+        if ((k += 4) == 128) {  // 128 words put at most 128 x 510 = 65280 in a 16-bit lane
             total += fold(lanes);
             lanes = 0;
             k = 0;
         }
     }
+    for (; i < words; i++) {
+        lanes += (word[i] & 0x00FF00FFu) + ((word[i] >> 8) & 0x00FF00FFu);
+    }
     total += fold(lanes);
-    for (int32_t i = 4 * words; i < cells; i++) {
+    for (i = 4 * words; i < cells; i++) {
         total += heat[i];
     }
     return (int32_t)total;
