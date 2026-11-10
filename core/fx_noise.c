@@ -45,7 +45,7 @@ void fx_noise_mix(fx_noise_t *s, int16_t *buf, int32_t n) {
             int32_t c = s->bed_coef >> 8, x = noise(s);
             s->y1 += (c * (x - s->y1)) >> 15;
             s->y2 += (c * (s->y1 - s->y2)) >> 15;
-            sum += (s->y2 * (s->bed_level >> 8)) >> 12;
+            sum += (s->y2 * (s->bed_level >> 8)) >> 11;
         }
         for (int32_t i = 0; i < FX_NOISE_VOICES; i++) {
             if (s->level[i] == 0 && s->level_to[i] == 0) {

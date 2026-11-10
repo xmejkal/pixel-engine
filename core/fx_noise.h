@@ -9,11 +9,12 @@
 // Every value is bounded, so int32 never overflows, and there is no 64-bit maths, no / and no %:
 //   noise x = (draw - 32768) >> 2 with a xorshift16 draw of 1 to 65535, so |x| <= 8192.
 //   Bed: y1 += c * (x - y1) >> 15, y2 += c * (y1 - y2) >> 15, with c at most 16384 (Q15), |x - y| <= 16384, so a
-//   product is at most 2^28. The output is y2 * level >> 12 with level at most 32768 and |y2| <= 8192: 2^28.
+//   product is at most 2^28. The output is y2 * level >> 11 with level at most 32768 and |y2| <= 8192: 2^28. At a
+//   250 Hz cutoff its rms is about 0.36 * level and its peaks about 1.5 * level.
 //   Whoosh (Chamberlin band-pass, damping 1, so no multiply for it): high = x - low - band; band += f * high >> 15;
-//   low += f * band >> 15, with f at most 25080 (2000 Hz) and stable while f < 2 - damping, in real units, so f < 32768. The worst input (the
-//   signs of the impulse response) gives |low| <= 11.2k, |band| <= 13.5k, |high| <= 24.5k, so f * high <= 6.2e8. The
-//   output is band * level >> 14 with level at most 32768: 4.4e8 before the shift.
+//   low += f * band >> 15, with f at most 25080 (2000 Hz) and stable while f < 2 - damping, so f < 32768 in Q15. The
+//   worst input (the signs of the impulse response) gives |low| <= 11.2k, |band| <= 13.5k, |high| <= 24.5k, so
+//   f * high <= 6.2e8. The output is band * level >> 14 with level at most 32768: 4.4e8 before the shift.
 //   Glide: levels and coefficients are kept in Q23 (the target << 8), and move (target - value) >> 9 a sample. A
 //   positive step rounds down, so a value stops up to 511 (2 in the unshifted units) short of a target above it, and a
 //   target of 0 is reached exactly.

@@ -61,7 +61,7 @@ class Reference:
                 c, x = self.bed_coef >> 8, self.noise()
                 self.y1 += fits(c * (x - self.y1)) >> 15
                 self.y2 += fits(c * (self.y1 - self.y2)) >> 15
-                total += fits(self.y2 * (self.bed_level >> 8)) >> 12
+                total += fits(self.y2 * (self.bed_level >> 8)) >> 11
             for i in range(VOICES):
                 if not (self.level[i] or self.level_to[i]):
                     continue
@@ -257,7 +257,7 @@ class NoiseCoreTest(unittest.TestCase):
             c.mix([0] * 4000)
             out.append(rms(c.mix([0] * 32000)))
         self.assertLess(abs(out[0] - out[1]) / out[0], 0.1)
-        self.assertTrue(1000 < out[0] < 2000, out)
+        self.assertTrue(2000 < out[0] < 3500, out)
 
     def test_the_whoosh_rises_with_its_centre_and_stays_in_range(self):
         out = []
