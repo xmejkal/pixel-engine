@@ -7,7 +7,8 @@
 //
 // Every value is bounded, so int32 never overflows: samples under 2^15, gains and windows in Q15 (32768 is 1.0), a
 // product has one factor under 2^15 and one at most 2^15, and the bed length is under 2^17 samples. No / or %: a
-// grain's length is 2^10, 2^11 or 2^12 samples (64, 128 or 256 ms), so its triangle window is a shift.
+// grain's length is 2^10, 2^11 or 2^12 samples (64, 128 or 256 ms), and its window is a shift: a ramp of FADE samples in,
+// flat, a ramp out.
 #ifndef FX_GRAINS_H
 #define FX_GRAINS_H
 
@@ -21,6 +22,7 @@
 #define FX_GRAINS_INDEX_INTS (1 + 3 * FX_GRAINS_POPS)  // the index's int32 count at most
 #define FX_GRAINS_LOOK_INTS 2
 #define FX_GRAINS_MIN_BED 4096  // samples: the longest grain
+#define FX_GRAINS_FADE 512  // samples (32 ms): a grain's ramp in and out; 512 << 6 is 1.0 in Q15
 
 // The caller owns the state, one per crackle (a bytearray on the board). No static state.
 typedef struct {
@@ -34,7 +36,7 @@ typedef struct {
     int32_t g_len[FX_GRAINS_BED_SLOTS];  // 1024, 2048 or 4096
     int32_t g_log[FX_GRAINS_BED_SLOTS];  // 10, 11 or 12: log2 of g_len
     int32_t g_start[FX_GRAINS_BED_SLOTS];  // the grain's first sample in the bed
-    int32_t g_gain[FX_GRAINS_BED_SLOTS];  // Q15, 16384 to 32767
+    int32_t g_gain[FX_GRAINS_BED_SLOTS];  // Q15, 24576 to 32767
     int32_t p_off[FX_GRAINS_POPS], p_len[FX_GRAINS_POPS], p_size[FX_GRAINS_POPS];  // the bank's pops
     int32_t s_pos[FX_GRAINS_POP_SLOTS];  // samples played of the slot's pop; free when s_pos >= s_len
     int32_t s_len[FX_GRAINS_POP_SLOTS];

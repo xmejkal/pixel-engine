@@ -107,8 +107,8 @@ static void start_pops(fx_grains_t *g) {
     }
 }
 
-// The next grain in a free slot, if there is one: 64 to 256 ms from a random start in the bed, and the one after it
-// in half its length.
+// The next grain in a free slot, if there is one: 64 to 256 ms from a random start in the bed. The one after it starts
+// FADE samples before this one ends, so the fade-out and the next fade-in are the same 32 ms and the bed never dips.
 static void start_grain(fx_grains_t *g) {
     int32_t i = 0;
     while (i < FX_GRAINS_BED_SLOTS && g->g_pos[i] < g->g_len[i]) {
@@ -120,9 +120,9 @@ static void start_grain(fx_grains_t *g) {
     g->g_log[i] = between(g, 10, 13);
     g->g_len[i] = 1 << g->g_log[i];
     g->g_start[i] = (draw(g) * ((g->bed_len - g->g_len[i]) >> 4)) >> 12;  // 0 to bed_len - g_len
-    g->g_gain[i] = between(g, 16384, 32768);
+    g->g_gain[i] = between(g, 24576, 32768);
     g->g_pos[i] = 0;
-    g->next_in = g->g_len[i] >> 1;
+    g->next_in = g->g_len[i] - FX_GRAINS_FADE;
 }
 
 void fx_grains_render(fx_grains_t *g, const int16_t *bank, int16_t *buf, int32_t n) {
@@ -131,8 +131,8 @@ void fx_grains_render(fx_grains_t *g, const int16_t *bank, int16_t *buf, int32_t
         // the bed's level: noise (under 2^20 in 1/16) through two poles at 2^-11, so it moves at about 1 Hz
         g->lev1 += ((draw(g) - 32768) * 16 - g->lev1) >> 11;
         g->lev2 += (g->lev1 - g->lev2) >> 11;
-        int32_t level = 24000 + g->lev2;  // Q15, 16384 to 32768 after the clamp
-        level = level < 16384 ? 16384 : level > 32768 ? 32768 : level;
+        int32_t level = 26000 + g->lev2;  // Q15, 19661 to 32768 after the clamp
+        level = level < 19661 ? 19661 : level > 32768 ? 32768 : level;
         if (g->next_in > 0) {
             g->next_in--;
         }
@@ -144,8 +144,9 @@ void fx_grains_render(fx_grains_t *g, const int16_t *bank, int16_t *buf, int32_t
             if (g->g_pos[i] >= g->g_len[i]) {
                 continue;
             }
-            int32_t pos = g->g_pos[i]++, half = g->g_len[i] >> 1;
-            int32_t window = (pos < half ? pos : g->g_len[i] - pos) << (16 - g->g_log[i]);  // 0 to 32768
+            int32_t pos = g->g_pos[i]++, left = g->g_len[i] - pos;
+            int32_t ramp = pos < FX_GRAINS_FADE ? pos : left < FX_GRAINS_FADE ? left : FX_GRAINS_FADE;
+            int32_t window = ramp << 6;  // 0 to 32768: a ramp in, flat, a ramp out
             int32_t v = (bank[g->g_start[i] + pos] * window) >> 15;
             bed += (v * g->g_gain[i]) >> 15;
         }
