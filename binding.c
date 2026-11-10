@@ -309,6 +309,12 @@ static mp_obj_t heat_field_draw(size_t n_args, const mp_obj_t *args) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(heat_field_draw_obj, 3, 4, heat_field_draw);
 
+// take_births(): the embers born since the last call, and the count back to 0 (P747).
+static mp_obj_t heat_field_take_births(mp_obj_t self_in) {
+    return MP_OBJ_NEW_SMALL_INT(fx_fire_take_births(&field(self_in)->fire));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(heat_field_take_births_obj, heat_field_take_births);
+
 // __del__(): free the field once.
 static mp_obj_t heat_field_del(mp_obj_t self_in) {
     heat_field_obj_t *self = field(self_in);
@@ -338,6 +344,7 @@ static const mp_rom_map_elem_t heat_field_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_burn), MP_ROM_PTR(&heat_field_burn_obj) },
     { MP_ROM_QSTR(MP_QSTR_scroll), MP_ROM_PTR(&heat_field_scroll_obj) },  // P602
     { MP_ROM_QSTR(MP_QSTR_draw), MP_ROM_PTR(&heat_field_draw_obj) },
+    { MP_ROM_QSTR(MP_QSTR_take_births), MP_ROM_PTR(&heat_field_take_births_obj) },  // P747
     { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&heat_field_del_obj) },
 };
 static MP_DEFINE_CONST_DICT(heat_field_locals, heat_field_locals_table);

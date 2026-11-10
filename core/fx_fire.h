@@ -35,6 +35,7 @@ typedef struct {
     int32_t ember_heat[FX_FIRE_MAX_EMBERS];  // 0 is a free slot
     int32_t base;  // 1: the step makes the bottom row; 0: it clears it (P596)
     int32_t filter;  // FX_FIRE_NEAREST or FX_FIRE_LINEAR, see fx_fire_set_filter (P608)
+    int32_t born;  // the embers born since fx_fire_take_births last read it (P747)
 } fx_fire_t;
 
 // Zero the field, seed the random numbers (a seed of 0 becomes 1), make the cooling map and place the spots. The look
@@ -91,6 +92,13 @@ void fx_fire_burn(fx_fire_t *f, int32_t x0, int32_t y0, int32_t x1, int32_t y1, 
 // neighbour past the field's edge is the edge cell (GL_CLAMP_TO_EDGE). The panel map stays: panel (px, py) shows game
 // pixel (2w - 1 - py, px). The blend leaves a pixel of alpha 0 as it is.
 void fx_fire_set_filter(fx_fire_t *f, int32_t filter);
+
+// --- MVP (P747) ---
+// The embers born since the last call, and the count back to 0: a sound plays one pop per birth, so the pops come
+// with the sparks on screen. A birth is an ember that takes a slot. A draw that finds all FX_FIRE_MAX_EMBERS slots
+// taken is no birth. An ember that leaves the field in its first step (born at x 0 and blown left) still counts,
+// with no spark drawn.
+int32_t fx_fire_take_births(fx_fire_t *f);
 
 // --- Later, not MVP: kept for other games, the PO 2026-11-04 (P602) ---
 // The world moves under the screen by dx cells, -1024 to 1024 checked by the caller: every row shifts by dx (negative
