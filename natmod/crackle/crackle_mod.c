@@ -14,18 +14,18 @@ static fx_crackle_t *state(mp_obj_t state_in) {
     return info.buf;
 }
 
-// init(state, seed, roar_shift, roar_gain, pop_min, pop_max, decay_min, decay_max, tails, tail_gap)
+// init(state, seed, roar_shift, roar_gain, pop_min, pop_max, decay_min, decay_max, tails, tail_gap, gain)
 static mp_obj_t init(size_t n_args, const mp_obj_t *args) {
     (void)n_args;
-    int32_t look[8];
-    for (int i = 0; i < 8; i++) {
+    int32_t look[9];
+    for (int i = 0; i < 9; i++) {
         look[i] = mp_obj_get_int(args[2 + i]);
     }
     fx_crackle_init(state(args[0]), (uint32_t)mp_obj_get_int(args[1]), look[0], look[1], look[2], look[3], look[4],
-                    look[5], look[6], look[7]);
+                    look[5], look[6], look[7], look[8]);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(init_obj, 10, 10, init);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(init_obj, 11, 11, init);
 
 // add_pops(state, n)
 static mp_obj_t add_pops(mp_obj_t state_in, mp_obj_t n_in) {

@@ -17,7 +17,8 @@ static int32_t between(fx_crackle_t *c, int32_t lo, int32_t hi) {
 }
 
 void fx_crackle_init(fx_crackle_t *c, uint32_t seed, int32_t roar_shift, int32_t roar_gain, int32_t pop_min,
-                     int32_t pop_max, int32_t decay_min, int32_t decay_max, int32_t tails, int32_t tail_gap) {
+                     int32_t pop_max, int32_t decay_min, int32_t decay_max, int32_t tails, int32_t tail_gap,
+                     int32_t gain) {
     c->rng = (int32_t)(seed & 0xFFFF) ? (int32_t)(seed & 0xFFFF) : 1;
     c->roar1 = c->roar2 = 0;
     c->roar_shift = roar_shift;
@@ -28,6 +29,7 @@ void fx_crackle_init(fx_crackle_t *c, uint32_t seed, int32_t roar_shift, int32_t
     c->decay_max = decay_max;
     c->tails = tails;
     c->tail_gap = tail_gap;
+    c->gain = gain;
     c->popped = c->started = c->dropped = 0;
     for (int32_t i = 0; i < FX_CRACKLE_SLOTS; i++) {
         c->wait[i] = c->armed[i] = c->env[i] = c->decay[i] = c->lp[i] = c->shift[i] = c->tails_left[i] = 0;
@@ -88,6 +90,7 @@ void fx_crackle_render(fx_crackle_t *c, int16_t *buf, int32_t n) {
                 }
             }
         }
+        sum = (sum * c->gain) >> 6;  // |sum| under 2^17 before, so under 2^27 after
         buf[k] = (int16_t)(sum > FX_CRACKLE_PEAK ? FX_CRACKLE_PEAK : sum < -FX_CRACKLE_PEAK ? -FX_CRACKLE_PEAK : sum);
     }
 }

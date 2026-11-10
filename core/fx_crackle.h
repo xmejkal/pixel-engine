@@ -21,7 +21,7 @@ typedef struct {
     int32_t rng;  // xorshift16 state, 1 to 65535
     int32_t roar1, roar2;  // the roar's two one-pole low-passes over the noise
     // the look, see fx_crackle_init
-    int32_t roar_shift, roar_gain, pop_min, pop_max, decay_min, decay_max, tails, tail_gap;
+    int32_t roar_shift, roar_gain, pop_min, pop_max, decay_min, decay_max, tails, tail_gap, gain;
     int32_t popped, started, dropped;  // popped has one writer (add_pops), started and dropped another (render)
     int32_t wait[FX_CRACKLE_SLOTS];  // samples until the slot's burst starts; a slot is free when wait and env are 0
     int32_t armed[FX_CRACKLE_SLOTS];  // the level the next burst starts at
@@ -38,9 +38,10 @@ typedef struct {
 // decay_max, under 32768 and at most 16383 apart: the burst's factor a sample in 1/32768, drawn between them; at
 // 16 kHz, 28400 lasts about 3 ms and 31600 about 12 ms to a thousandth. tails 0 to 3: at most this many small clicks
 // after a burst, each at half the level before it. tail_gap 0 to 16383: a click comes 32 + a draw under tail_gap
-// samples after the sound before it.
+// samples after the sound before it. gain 0 to 1023: the whole sum in 1/64, so 64 keeps it, before the clamp.
 void fx_crackle_init(fx_crackle_t *c, uint32_t seed, int32_t roar_shift, int32_t roar_gain, int32_t pop_min,
-                     int32_t pop_max, int32_t decay_min, int32_t decay_max, int32_t tails, int32_t tail_gap);
+                     int32_t pop_max, int32_t decay_min, int32_t decay_max, int32_t tails, int32_t tail_gap,
+                     int32_t gain);
 
 // n more pops, n >= 0. They start in the next render. Only this adds to popped.
 void fx_crackle_add_pops(fx_crackle_t *c, int32_t n);

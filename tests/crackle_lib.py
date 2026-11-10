@@ -15,7 +15,7 @@ class State(ctypes.Structure):
 
     _fields_ = [(name, ctypes.c_int32) for name in (
         "rng", "roar1", "roar2", "roar_shift", "roar_gain", "pop_min", "pop_max", "decay_min", "decay_max", "tails",
-        "tail_gap", "popped", "started", "dropped")] + [
+        "tail_gap", "gain", "popped", "started", "dropped")] + [
         (name, ctypes.c_int32 * SLOTS) for name in ("wait", "armed", "env", "decay", "lp", "shift", "tails_left")]
 
 

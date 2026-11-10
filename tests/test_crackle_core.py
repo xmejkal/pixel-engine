@@ -13,7 +13,7 @@ sys.path.insert(0, HERE)
 
 from crackle_lib import CORE_SOURCES, HAVE_CLANG, CCrackle, samples  # noqa: E402
 
-LOOK = (4, 0, 8000, 12000, 28400, 31600, 3, 4000)  # no roar, so a pop ends in silence
+LOOK = (4, 0, 8000, 12000, 28400, 31600, 3, 4000, 64)  # no roar, so a pop ends in silence
 RATE = 16000
 
 
