@@ -84,12 +84,25 @@ static mp_obj_t grains_init(size_t n_args, const mp_obj_t *args) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(grains_init_obj, 4, 4, grains_init);
 
-// grains_add_pops(state, n)
-static mp_obj_t grains_add_pops(mp_obj_t state_in, mp_obj_t n_in) {
-    fx_grains_add_pops(grains_state(state_in), mp_obj_get_int(n_in));
+// grains_add_pops(state, n, rises=None): rises an array("b") of the births' ember rises (2 to 5); a short one leaves
+// the later pops without a rise (P751)
+static mp_obj_t grains_add_pops(size_t n_args, const mp_obj_t *args) {
+    int8_t rises[FX_GRAINS_RISES] = { 0 };
+    bool have = n_args > 2 && args[2] != mp_const_none;
+    if (have) {
+        mp_buffer_info_t info;
+        mp_get_buffer_raise(args[2], &info, MP_BUFFER_READ);
+        if (info.typecode != 'b') {
+            mp_raise_ValueError(MP_ERROR_TEXT("an array('b') is needed"));
+        }
+        for (size_t i = 0; i < info.len && i < FX_GRAINS_RISES; i++) {
+            rises[i] = ((const int8_t *)info.buf)[i];
+        }
+    }
+    fx_grains_add_pops(grains_state(args[0]), mp_obj_get_int(args[1]), have ? rises : NULL);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(grains_add_pops_obj, grains_add_pops);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(grains_add_pops_obj, 2, 3, grains_add_pops);
 
 // grains_render(state, bank, buf): buf is an array("h"), filled whole.
 static mp_obj_t grains_render(mp_obj_t state_in, mp_obj_t bank_in, mp_obj_t buf_in) {
