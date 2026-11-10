@@ -4,8 +4,17 @@
 #define GLIDE 9  // a value moves 1/2^9 of the way to its target a sample: a time constant of 512 samples, 32 ms
 #define PEAK 32767
 
+// -O2 for fx_noise_mix and the noise draw it calls, and no other function: the natmod builds at -Os, which made 8 voices
+// cost 948 to 1054 us a block (run148). A -O2 on the whole module added 100 us to a Fire block where nothing whooshes.
+// Clang (the Mac tests, with -Werror) does not know the attribute.
+#if defined(__GNUC__) && !defined(__clang__)
+#define FX_O2 __attribute__((optimize("O2")))
+#else
+#define FX_O2
+#endif
+
 // xorshift16 (shifts 7, 9, 8): 1 to 65535, every value once in 65535 draws. The noise is its draw, centred, 14 bits.
-static int32_t noise(fx_noise_t *s) {
+FX_O2 static int32_t noise(fx_noise_t *s) {
     int32_t x = s->rng;
     x ^= (x << 7) & 0xFFFF;
     x ^= x >> 9;
@@ -14,8 +23,8 @@ static int32_t noise(fx_noise_t *s) {
     return (x - 32768) >> 2;
 }
 
-static int32_t clamp(int32_t v, int32_t hi) {
-    return v < 0 ? 0 : v > hi ? hi : v;
+static int32_t clamp(int32_t v, int32_t lo, int32_t hi) {
+    return v < lo ? lo : v > hi ? hi : v;
 }
 
 void fx_noise_init(fx_noise_t *s, uint32_t seed) {
@@ -28,15 +37,16 @@ void fx_noise_init(fx_noise_t *s, uint32_t seed) {
 
 // --- Later, not MVP: the bed is off in FireSound (BED = False), kept for a wind sound that follows the gusts ---
 void fx_noise_bed(fx_noise_t *s, int32_t level, int32_t cutoff_coef) {
-    s->bed_level_to = clamp(level, FX_NOISE_MAX_LEVEL) << 8;
-    s->bed_coef_to = clamp(cutoff_coef, FX_NOISE_MAX_BED_COEF) << 8;
+    s->bed_level_to = clamp(level, 0, FX_NOISE_MAX_LEVEL) << 8;
+    s->bed_coef_to = clamp(cutoff_coef, 0, FX_NOISE_MAX_BED_COEF) << 8;
 }
 
 void fx_noise_whoosh(fx_noise_t *s, int32_t i, int32_t level, int32_t centre_coef) {
-    s->level_to[i] = clamp(level, FX_NOISE_MAX_LEVEL) << 8;
-    s->coef_to[i] = clamp(centre_coef, FX_NOISE_MAX_WHOOSH_COEF) << 8;
+    s->level_to[i] = clamp(level, 0, FX_NOISE_MAX_LEVEL) << 8;
+    s->coef_to[i] = clamp(centre_coef, FX_NOISE_F_MIN, FX_NOISE_MAX_WHOOSH_COEF) << 8;
 }
 
+FX_O2
 void fx_noise_mix(fx_noise_t *s, int16_t *buf, int32_t n) {
     for (int32_t k = 0; k < n; k++) {
         int32_t in = buf[k], sum = in;

@@ -94,5 +94,7 @@ class GrainsModule:
         self.lib.fx_noise_whoosh(ctypes.byref(NoiseState.from_buffer(state)), i, level, centre_coef)
 
     def noise_mix(self, state, buf):
-        """buf an array("h"), added into."""
+        """buf an array("h"), added into. ValueError for anything else, as the module raises it."""
+        if not isinstance(buf, array) or buf.typecode != "h":
+            raise ValueError("buf is an array('h')")
         self.lib.fx_noise_mix(ctypes.byref(NoiseState.from_buffer(state)), ctypes.c_void_p(address(buf)), len(buf))

@@ -12,9 +12,11 @@
 //   product is at most 2^28. The output is y2 * level >> 11 with level at most 32768 and |y2| <= 8192: 2^28. At a
 //   250 Hz cutoff its rms is about 0.36 * level and its peaks about 1.5 * level.
 //   Whoosh (Chamberlin band-pass, damping 1, so no multiply for it): high = x - low - band; band += f * high >> 15;
-//   low += f * band >> 15, with f at most 25080 (2000 Hz) and stable while f < 2 - damping, so f < 32768 in Q15. The
-//   worst input (the signs of the impulse response) gives |low| <= 11.2k, |band| <= 13.5k, |high| <= 24.5k, so
-//   f * high <= 6.2e8. The output is band * level >> 14 with level at most 32768: 4.4e8 before the shift.
+//   low += f * band >> 15, with f from 3000 (FX_NOISE_F_MIN, 370 Hz) to 25080 (2000 Hz) and stable while
+//   f < 2 - damping, so f < 32768 in Q15. Under 3000 the rounding of >> 15 drifts the state and leaves a DC offset,
+//   so fx_noise_whoosh raises f to 3000. For f in [3000, 25080] the worst input (the signs of the impulse response)
+//   gives |low| <= 11.2k, |band| <= 13.5k, |high| <= 24.5k, so f * high <= 6.2e8. The output is band * level >> 14
+//   with level at most 32768: 4.4e8 before the shift.
 //   Glide: levels and coefficients are kept in Q23 (the target << 8), and move (target - value) >> 9 a sample. A
 //   positive step rounds down, so a value stops up to 511 (2 in the unshifted units) short of a target above it, and a
 //   target of 0 is reached exactly.
@@ -29,6 +31,7 @@
 #define FX_NOISE_MAX_LEVEL 32768  // a level, a gain in 1/32768 of the filter's output
 #define FX_NOISE_MAX_BED_COEF 16384  // the bed's one-pole coefficient, Q15: 1 - exp(-2 pi fc / 16000) is 0.5 at 1.8 kHz
 #define FX_NOISE_MAX_WHOOSH_COEF 25080  // 2 sin(pi fc / 16000) in Q15 at fc = 2000 Hz
+#define FX_NOISE_F_MIN 3000  // the lowest whoosh coefficient, about 370 Hz: under it the rounding drifts
 
 // The caller owns the state, one per sound (a bytearray on the board). No static state.
 typedef struct {
@@ -48,7 +51,7 @@ void fx_noise_init(fx_noise_t *s, uint32_t seed);
 void fx_noise_bed(fx_noise_t *s, int32_t level, int32_t cutoff_coef);
 
 // Voice i's targets (i 0 to FX_NOISE_VOICES - 1, checked by the caller): level 0 to FX_NOISE_MAX_LEVEL, centre_coef
-// 0 to FX_NOISE_MAX_WHOOSH_COEF. A number out of its range is clamped to it.
+// FX_NOISE_F_MIN to FX_NOISE_MAX_WHOOSH_COEF. A number out of its range is clamped to it.
 void fx_noise_whoosh(fx_noise_t *s, int32_t i, int32_t level, int32_t centre_coef);
 
 // n more samples added into buf, each sum that the noise changed clamped to -32767 to 32767. The caller's n is not

@@ -16,6 +16,7 @@ from grains_lib import HAVE_CLANG, VOICES, GrainsModule, NoiseState  # noqa: E40
 
 LIMIT = 1 << 31
 MAX_LEVEL, MAX_BED, MAX_WHOOSH = 32768, 16384, 25080  # FX_NOISE_MAX_LEVEL, _MAX_BED_COEF, _MAX_WHOOSH_COEF
+F_MIN = 3000  # FX_NOISE_F_MIN
 FIELDS = [name for name, _ in NoiseState._fields_]
 
 
@@ -49,7 +50,7 @@ class Reference:
 
     def whoosh(self, i, level, coef):
         self.level_to[i] = min(max(level, 0), MAX_LEVEL) << 8
-        self.coef_to[i] = min(max(coef, 0), MAX_WHOOSH) << 8
+        self.coef_to[i] = min(max(coef, F_MIN), MAX_WHOOSH) << 8
 
     def mix(self, buf):
         out = []
@@ -158,9 +159,25 @@ class NoiseCoreTest(unittest.TestCase):
         self.assertEqual(c.mix(buf), ref.mix(buf))
         self.assertEqual(c.fields(), ref.fields())
 
-    def test_the_worst_input_stays_inside_the_headers_bounds(self):
-        f = MAX_WHOOSH
+    def test_a_coefficient_under_f_min_is_raised_to_it(self):
+        c = Noise()
+        c.m.noise_whoosh(c.state, 2, 1000, 0)
+        c.m.noise_whoosh(c.state, 3, 1000, F_MIN - 1)
+        c.m.noise_whoosh(c.state, 4, 1000, F_MIN)
+        self.assertEqual(c.get("coef_to")[2:5], [F_MIN << 8] * 3)
 
+    def test_the_mix_takes_only_an_array_of_h(self):
+        c = Noise()
+        for bad in ([0] * 4, bytearray(8), array("i", [0] * 4)):
+            with self.assertRaises(ValueError):
+                c.m.noise_mix(c.state, bad)
+
+    def test_the_worst_input_stays_inside_the_headers_bounds(self):
+        for f in (F_MIN, 10000, MAX_WHOOSH):  # the header's bounds hold for f in [3000, 25080]
+            self.check_whoosh_bounds(f)
+        self.check_bed_bounds()
+
+    def check_whoosh_bounds(self, f):
         def whoosh(x, s):  # the filter without the floors, in real numbers
             low, band, _ = s
             high = x - low - band
@@ -187,6 +204,8 @@ class NoiseCoreTest(unittest.TestCase):
                 peaks.append((abs(ref.low[0]), abs(ref.band[0])))
             self.assertLessEqual(max(p[0] for p in peaks), 11200 + 16)
             self.assertLessEqual(max(p[1] for p in peaks), 13500 + 16)
+
+    def check_bed_bounds(self):
         for x in (8192, -8192):  # the bed at its largest coefficient and level, on the largest input
             ref = Reference(1)
             ref.bed_level = ref.bed_level_to = MAX_LEVEL << 8

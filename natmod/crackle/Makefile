@@ -9,5 +9,5 @@ SRC = crackle_mod.c ../../core/fx_crackle.c ../../core/fx_grains.c ../../core/fx
 ARCH ?= xtensawin
 CFLAGS += -I../../core -fno-builtin
 include $(MPY_DIR)/py/dynruntime.mk
-# -O2 after the .mk, whose -Os would win: the 8 whoosh voices made render 948 to 1054 us a block at -Os, at most 891 us at -O2 (run148)
-CFLAGS += -O2
+# No global -O2: core/fx_noise.c gives fx_noise_mix and its noise draw an optimize("O2") attribute, the rest stays at the
+# .mk's -Os.
