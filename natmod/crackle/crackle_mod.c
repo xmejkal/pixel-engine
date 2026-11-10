@@ -5,6 +5,7 @@
 #include "py/dynruntime.h"
 #include "fx_crackle.h"
 #include "fx_grains.h"
+#include "fx_noise.h"
 
 // The state inside a bytearray, which must hold SIZE bytes.
 static fx_crackle_t *state(mp_obj_t state_in) {
@@ -133,6 +134,56 @@ static mp_obj_t grains_counts(mp_obj_t state_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(grains_counts_obj, grains_counts);
 
+// --- MVP (P753) --- The noise: a bed and 8 whoosh voices. The state is a bytearray of NOISE_SIZE bytes.
+static fx_noise_t *noise_state(mp_obj_t state_in) {
+    mp_buffer_info_t info;
+    mp_get_buffer_raise(state_in, &info, MP_BUFFER_RW);
+    if (info.len < sizeof(fx_noise_t)) {
+        mp_raise_ValueError(MP_ERROR_TEXT("a bytearray of NOISE_SIZE bytes is needed"));
+    }
+    return info.buf;
+}
+
+// noise_init(state, seed)
+static mp_obj_t noise_init(mp_obj_t state_in, mp_obj_t seed_in) {
+    fx_noise_init(noise_state(state_in), (uint32_t)mp_obj_get_int(seed_in));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(noise_init_obj, noise_init);
+
+// noise_bed(state, level, cutoff_coef): targets, level 0 to 32768, coef 0 to 16384 (Q15); out of range is clamped
+static mp_obj_t noise_bed(size_t n_args, const mp_obj_t *args) {
+    (void)n_args;
+    fx_noise_bed(noise_state(args[0]), mp_obj_get_int(args[1]), mp_obj_get_int(args[2]));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(noise_bed_obj, 3, 3, noise_bed);
+
+// noise_whoosh(state, i, level, centre_coef): voice i 0 to 7, level 0 to 32768, coef 0 to 25080 (Q15)
+static mp_obj_t noise_whoosh(size_t n_args, const mp_obj_t *args) {
+    (void)n_args;
+    mp_int_t i = mp_obj_get_int(args[1]);
+    if (i < 0 || i >= FX_NOISE_VOICES) {
+        mp_raise_ValueError(MP_ERROR_TEXT("a voice is 0 to 7"));
+    }
+    fx_noise_whoosh(noise_state(args[0]), (int32_t)i, mp_obj_get_int(args[2]), mp_obj_get_int(args[3]));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(noise_whoosh_obj, 4, 4, noise_whoosh);
+
+// noise_mix(state, buf): adds into buf, an array("h"), and clamps
+static mp_obj_t noise_mix(mp_obj_t state_in, mp_obj_t buf_in) {
+    fx_noise_t *s = noise_state(state_in);
+    mp_buffer_info_t buf;
+    mp_get_buffer_raise(buf_in, &buf, MP_BUFFER_RW);
+    if (buf.typecode != 'h') {
+        mp_raise_ValueError(MP_ERROR_TEXT("an array('h') is needed"));
+    }
+    fx_noise_mix(s, buf.buf, (int32_t)(buf.len / 2));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(noise_mix_obj, noise_mix);
+
 mp_obj_t mpy_init(mp_obj_fun_bc_t *self, size_t n_args, size_t n_kw, mp_obj_t *args) {
     MP_DYNRUNTIME_INIT_ENTRY
     mp_store_global(MP_QSTR_SIZE, MP_OBJ_NEW_SMALL_INT(sizeof(fx_crackle_t)));
@@ -145,5 +196,10 @@ mp_obj_t mpy_init(mp_obj_fun_bc_t *self, size_t n_args, size_t n_kw, mp_obj_t *a
     mp_store_global(MP_QSTR_grains_add_pops, MP_OBJ_FROM_PTR(&grains_add_pops_obj));
     mp_store_global(MP_QSTR_grains_render, MP_OBJ_FROM_PTR(&grains_render_obj));
     mp_store_global(MP_QSTR_grains_counts, MP_OBJ_FROM_PTR(&grains_counts_obj));
+    mp_store_global(MP_QSTR_NOISE_SIZE, MP_OBJ_NEW_SMALL_INT(sizeof(fx_noise_t)));
+    mp_store_global(MP_QSTR_noise_init, MP_OBJ_FROM_PTR(&noise_init_obj));
+    mp_store_global(MP_QSTR_noise_bed, MP_OBJ_FROM_PTR(&noise_bed_obj));
+    mp_store_global(MP_QSTR_noise_whoosh, MP_OBJ_FROM_PTR(&noise_whoosh_obj));
+    mp_store_global(MP_QSTR_noise_mix, MP_OBJ_FROM_PTR(&noise_mix_obj));
     MP_DYNRUNTIME_INIT_EXIT
 }
