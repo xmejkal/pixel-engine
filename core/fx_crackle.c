@@ -11,7 +11,7 @@ static int32_t draw(fx_crackle_t *c) {
     return x;
 }
 
-// lo + a draw times (hi - lo) in 1/65536, so lo to hi - 1, or lo when hi <= lo.
+// lo + a draw times (hi - lo) in 1/65536: lo to hi - 1, or lo when hi == lo.
 static int32_t between(fx_crackle_t *c, int32_t lo, int32_t hi) {
     return lo + ((draw(c) * (hi - lo)) >> 16);
 }
@@ -90,7 +90,7 @@ void fx_crackle_render(fx_crackle_t *c, int16_t *buf, int32_t n) {
                 }
             }
         }
-        sum = (sum * c->gain) >> 6;  // |sum| under 2^17 before, so under 2^27 after
+        sum = (sum * c->gain) >> 6;  // |sum| under 2^18 before, so under 2^28 after
         buf[k] = (int16_t)(sum > FX_CRACKLE_PEAK ? FX_CRACKLE_PEAK : sum < -FX_CRACKLE_PEAK ? -FX_CRACKLE_PEAK : sum);
     }
 }

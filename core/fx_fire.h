@@ -95,7 +95,9 @@ void fx_fire_set_filter(fx_fire_t *f, int32_t filter);
 
 // --- MVP (P747) ---
 // The embers born since the last call, and the count back to 0: a sound plays one pop per birth, so the pops come
-// with the sparks on screen. An ember draw that finds all FX_FIRE_MAX_EMBERS slots taken is no birth.
+// with the sparks on screen. A birth is an ember that takes a slot. A draw that finds all FX_FIRE_MAX_EMBERS slots
+// taken is no birth. An ember that leaves the field in its first step (born at x 0 and blown left) still counts,
+// with no spark drawn.
 int32_t fx_fire_take_births(fx_fire_t *f);
 
 // --- Later, not MVP: kept for other games, the PO 2026-11-04 (P602) ---
