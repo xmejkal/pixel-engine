@@ -327,7 +327,7 @@ static mp_obj_t heat_field_take_births(size_t n_args, const mp_obj_t *args) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(heat_field_take_births_obj, 1, 2, heat_field_take_births);
 
-// --- MVP (P753) ---
+// --- Later, not MVP: only the noise bed reads the stats, and the bed is off (BED = False). Kept for the bed ---
 // stats(threshold=48): (total, height) of the field, see fx_fire_stats. A sound follows them, once per step.
 static mp_obj_t heat_field_stats(size_t n_args, const mp_obj_t *args) {
     heat_field_obj_t *self = live(args[0]);

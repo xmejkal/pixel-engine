@@ -406,7 +406,7 @@ int32_t fx_fire_take_births(fx_fire_t *f, int8_t *rises, int32_t n) {
     return births;
 }
 
-// --- MVP (P753) ---
+// --- Later, not MVP: only the noise bed reads the stats, and the bed is off (BED = False). Kept for the bed ---
 // Total: 4 cells per 32-bit word. The mask 0x00FF00FF takes cells 0 and 2 of the word into two 16-bit lanes, and the
 // shifted word takes cells 1 and 3. A word adds at most 510 to a lane, so after 128 words (65,280) the lanes are folded
 // into the total, before they could carry into each other.

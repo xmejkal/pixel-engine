@@ -26,6 +26,7 @@ void fx_noise_init(fx_noise_t *s, uint32_t seed) {
     s->rng = (int32_t)(seed & 0xFFFF) ? (int32_t)(seed & 0xFFFF) : 1;
 }
 
+// --- Later, not MVP: the bed is off in FireSound (BED = False), kept for a wind sound that follows the gusts ---
 void fx_noise_bed(fx_noise_t *s, int32_t level, int32_t cutoff_coef) {
     s->bed_level_to = clamp(level, FX_NOISE_MAX_LEVEL) << 8;
     s->bed_coef_to = clamp(cutoff_coef, FX_NOISE_MAX_BED_COEF) << 8;
