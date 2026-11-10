@@ -1,6 +1,7 @@
-"""core/fx_grains.c on the Mac (P751): GrainsModule builds it with clang and has the functions of the native module
-crackle_c (grains_init, grains_add_pops, grains_render, grains_counts, GRAINS_SIZE), so pixel-games' GrainCrackle runs
-on the Mac unchanged, and its tests and tools/crackle_wav.py hear the C. --- MVP (P751) ---"""
+"""core/fx_grains.c and fx_noise.c on the Mac (P751, P753): GrainsModule builds them with clang and has the functions of
+the native module crackle_c (grains_init, grains_add_pops, grains_render, grains_counts, GRAINS_SIZE, and the noise_
+functions with NOISE_SIZE), so pixel-games' GrainCrackle and FireSound run on the Mac unchanged, and its tests and
+tools/crackle_wav.py hear the C. --- MVP (P751, P753) ---"""
 
 import ctypes
 from array import array
@@ -8,7 +9,8 @@ from array import array
 from clang_lib import HAVE_CLANG, STRICT, build, core
 
 BED_SLOTS, POP_SLOTS, POPS, RISES = 3, 8, 12, 8
-CORE_SOURCES = core("fx_grains")
+CORE_SOURCES = core("fx_grains", "fx_noise")
+VOICES = 8  # FX_NOISE_VOICES
 
 
 class State(ctypes.Structure):
@@ -22,6 +24,14 @@ class State(ctypes.Structure):
         (name, ctypes.c_int32 * POP_SLOTS) for name in ("s_pos", "s_len", "s_off", "s_gain")]
 
 
+class NoiseState(ctypes.Structure):
+    """fx_noise_t, field for field (P753)."""
+
+    _fields_ = [("rng", ctypes.c_int32)] + [(name, ctypes.c_int32) for name in (
+        "bed_level", "bed_level_to", "bed_coef", "bed_coef_to", "y1", "y2")] + [
+        (name, ctypes.c_int32 * VOICES) for name in ("level", "level_to", "coef", "coef_to", "low", "band")]
+
+
 def address(buf):
     """The address of a bytearray or an array."""
     if isinstance(buf, bytearray):
@@ -33,6 +43,7 @@ class GrainsModule:
     """The native module's functions on the Mac. The state is a bytearray of GRAINS_SIZE bytes, as on the board."""
 
     GRAINS_SIZE = ctypes.sizeof(State)
+    NOISE_SIZE = ctypes.sizeof(NoiseState)
 
     def __init__(self):
         self.lib = build(CORE_SOURCES, STRICT + ("-fno-builtin",))
@@ -67,3 +78,23 @@ class GrainsModule:
     def grains_counts(self, state):
         st = self._state(state)
         return st.popped, st.started, st.dropped
+
+    # --- MVP (P753) --- the noise: a bed and 8 whoosh voices; the state is a bytearray of NOISE_SIZE bytes
+
+    def noise_init(self, state, seed):
+        self.lib.fx_noise_init(ctypes.byref(NoiseState.from_buffer(state)), ctypes.c_uint32(seed))
+
+    def noise_bed(self, state, level, cutoff_coef):
+        self.lib.fx_noise_bed(ctypes.byref(NoiseState.from_buffer(state)), level, cutoff_coef)
+
+    def noise_whoosh(self, state, i, level, centre_coef):
+        """ValueError for a voice not in 0 to 7, as the module raises it."""
+        if not 0 <= i < VOICES:
+            raise ValueError("a voice is 0 to 7")
+        self.lib.fx_noise_whoosh(ctypes.byref(NoiseState.from_buffer(state)), i, level, centre_coef)
+
+    def noise_mix(self, state, buf):
+        """buf an array("h"), added into. ValueError for anything else, as the module raises it."""
+        if not isinstance(buf, array) or buf.typecode != "h":
+            raise ValueError("buf is an array('h')")
+        self.lib.fx_noise_mix(ctypes.byref(NoiseState.from_buffer(state)), ctypes.c_void_p(address(buf)), len(buf))

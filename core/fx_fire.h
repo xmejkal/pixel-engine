@@ -104,6 +104,13 @@ void fx_fire_set_filter(fx_fire_t *f, int32_t filter);
 // 0 past the births. Only the first FX_FIRE_MAX_RISES births keep a rise, so later ones read 0 (no rise known).
 int32_t fx_fire_take_births(fx_fire_t *f, int8_t *rises, int32_t n);
 
+// --- MVP (P753) ---
+// Two numbers of the field for a sound that follows it, read after a step: total is the sum of every cell's heat, and
+// height is h - row for the highest row (the smallest row number) with at least 4 cells at or over threshold, so one
+// ember alone does not count. height is 0 when no row has 4. threshold 0 to 255 is checked by the caller. total is at
+// most 255 * w * h, under 2^31 for a field up to the binding's 1,024 x 1,024. It changes nothing in the field.
+void fx_fire_stats(const fx_fire_t *f, int32_t threshold, int32_t *total, int32_t *height);
+
 // --- Later, not MVP: kept for other games, the PO 2026-11-04 (P602) ---
 // The world moves under the screen by dx cells, -1024 to 1024 checked by the caller: every row shifts by dx (negative
 // is left, as a side-scroller's world moves), the cells it uncovers become 0, and |dx| >= w clears the field. Each

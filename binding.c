@@ -327,6 +327,21 @@ static mp_obj_t heat_field_take_births(size_t n_args, const mp_obj_t *args) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(heat_field_take_births_obj, 1, 2, heat_field_take_births);
 
+// --- Later, not MVP: only the noise bed reads the stats, and the bed is off (BED = False). Kept for the bed ---
+// stats(threshold=48): (total, height) of the field, see fx_fire_stats. A sound follows them, once per step.
+static mp_obj_t heat_field_stats(size_t n_args, const mp_obj_t *args) {
+    heat_field_obj_t *self = live(args[0]);
+    mp_int_t threshold = n_args > 1 ? mp_obj_get_int(args[1]) : 48;
+    if (threshold < 0 || threshold > 255) {
+        mp_raise_ValueError(MP_ERROR_TEXT("threshold is 0 to 255"));
+    }
+    int32_t total, height;
+    fx_fire_stats(&self->fire, (int32_t)threshold, &total, &height);
+    mp_obj_t items[2] = { mp_obj_new_int(total), MP_OBJ_NEW_SMALL_INT(height) };
+    return mp_obj_new_tuple(2, items);
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(heat_field_stats_obj, 1, 2, heat_field_stats);
+
 // __del__(): free the field once.
 static mp_obj_t heat_field_del(mp_obj_t self_in) {
     heat_field_obj_t *self = field(self_in);
@@ -357,6 +372,7 @@ static const mp_rom_map_elem_t heat_field_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_scroll), MP_ROM_PTR(&heat_field_scroll_obj) },  // P602
     { MP_ROM_QSTR(MP_QSTR_draw), MP_ROM_PTR(&heat_field_draw_obj) },
     { MP_ROM_QSTR(MP_QSTR_take_births), MP_ROM_PTR(&heat_field_take_births_obj) },  // P747
+    { MP_ROM_QSTR(MP_QSTR_stats), MP_ROM_PTR(&heat_field_stats_obj) },  // P753
     { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&heat_field_del_obj) },
 };
 static MP_DEFINE_CONST_DICT(heat_field_locals, heat_field_locals_table);

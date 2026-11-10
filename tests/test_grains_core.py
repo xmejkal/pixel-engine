@@ -175,10 +175,11 @@ class GrainsCoreTest(unittest.TestCase):
     def test_no_libc_or_libgcc_call(self):
         """The board's native module links with no runtime library, so the object names no outside symbol."""
         with tempfile.TemporaryDirectory() as tmp:
-            obj = os.path.join(tmp, "fx_grains.o")
-            subprocess.run(["clang", "-std=c99", "-O2", "-fno-builtin", "-c", "-o", obj, *CORE_SOURCES], check=True)
-            undefined = subprocess.run(["nm", "-u", obj], capture_output=True, text=True, check=True).stdout
-        self.assertEqual(undefined.strip(), "")
+            for source in CORE_SOURCES:  # fx_grains.c and, since P753, fx_noise.c
+                obj = os.path.join(tmp, os.path.basename(source) + ".o")
+                subprocess.run(["clang", "-std=c99", "-O2", "-fno-builtin", "-c", "-o", obj, source], check=True)
+                undefined = subprocess.run(["nm", "-u", obj], capture_output=True, text=True, check=True).stdout
+                self.assertEqual(undefined.strip(), "", source)
 
 
 if __name__ == "__main__":
