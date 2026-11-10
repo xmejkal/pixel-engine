@@ -38,6 +38,9 @@ int32_t fx_grains_init(fx_grains_t *g, uint32_t seed, const int32_t *look, const
     if (seen != (1 << FX_GRAINS_SIZES) - 1) {
         return 1;
     }
+    for (int32_t i = 0; i < FX_GRAINS_RISES; i++) {
+        g->rise[i] = 0;
+    }
     g->popped = g->started = g->dropped = g->next_in = g->lev1 = g->lev2 = 0;
     g->rng = (int32_t)(seed & 0xFFFF) ? (int32_t)(seed & 0xFFFF) : 1;
     g->bed_len = bed_len;
@@ -61,8 +64,18 @@ int32_t fx_grains_init(fx_grains_t *g, uint32_t seed, const int32_t *look, const
     return 0;
 }
 
-void fx_grains_add_pops(fx_grains_t *g, int32_t n) {
+void fx_grains_add_pops(fx_grains_t *g, int32_t n, const int8_t *rises) {
+    for (int32_t j = 0; j < n && j < FX_GRAINS_RISES; j++) {
+        g->rise[(g->popped + j) & (FX_GRAINS_RISES - 1)] = rises ? rises[j] : 0;
+    }
+    for (int32_t j = FX_GRAINS_RISES; j < n; j++) {
+        g->rise[(g->popped + j) & (FX_GRAINS_RISES - 1)] = 0;
+    }
     g->popped += n;
+}
+
+int32_t fx_grains_size_of_rise(int32_t rise, int32_t drawn) {
+    return rise == 5 ? 2 : rise == 4 ? 1 : drawn;
 }
 
 int32_t fx_grains_bank_len(const fx_grains_t *g) {
@@ -89,7 +102,8 @@ static void start_pops(fx_grains_t *g) {
             g->dropped++;
             continue;
         }
-        int32_t size = draw_size(g), same = 0, pick, j;
+        int32_t size = fx_grains_size_of_rise(g->rise[(g->started + g->dropped) & (FX_GRAINS_RISES - 1)], draw_size(g));
+        int32_t same = 0, pick, j;
         for (j = 0; j < g->n_pops; j++) {
             same += g->p_size[j] == size;
         }

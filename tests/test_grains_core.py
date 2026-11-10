@@ -37,8 +37,8 @@ class Grains:
         self.state = bytearray(self.m.GRAINS_SIZE)
         self.m.grains_init(self.state, seed, look, index)
 
-    def add_pops(self, n):
-        self.m.grains_add_pops(self.state, n)
+    def add_pops(self, n, rises=None):
+        self.m.grains_add_pops(self.state, n, rises)
 
     def render(self, n):
         buf = array("h", bytes(2 * n))
@@ -109,6 +109,56 @@ class GrainsCoreTest(unittest.TestCase):
         self.assertEqual(sum(seen), 3000)
         for got, want in zip(seen, (0.63, 0.21, 0.16)):
             self.assertAlmostEqual(got / 3000, want, delta=0.04)
+
+    def test_size_of_rise_maps_5_and_4_and_keeps_the_draw_for_the_rest(self):  # --- MVP (P751) ---
+        lib = Grains().m.lib
+        for drawn in range(3):
+            got = [lib.fx_grains_size_of_rise(r, drawn) for r in (0, 1, 2, 3, 4, 5, 6)]
+            self.assertEqual([drawn] * 4 + [1, 2, drawn], got)
+
+    def test_rises_5_and_4_make_the_biggest_and_the_middle_pop_and_the_rest_draw(self):  # --- MVP (P751) ---
+        for rise, level in ((5, 20000), (4, 5000)):
+            g = Grains(look=array("i", [0, 32768]))
+            for _ in range(40):
+                g.add_pops(1, array("b", [rise]))
+                self.assertGreater(g.render(120)[0], 0.55 * level)
+                self.assertEqual(g.render(8)[0], 0)
+        seen = {0: 0, 1: 0, 2: 0}
+        for rise in (0, 2, 3):
+            g = Grains(seed=3, look=array("i", [0, 32768]))
+            for _ in range(300):
+                g.add_pops(1, array("b", [rise]))
+                first = g.render(120)[0]
+                seen[0 if first < 2000 else 1 if first < 8000 else 2] += 1
+        self.assertTrue(all(v > 0 for v in seen.values()))
+        self.assertGreater(seen[0], seen[2])
+
+    def test_each_pop_of_one_call_has_its_own_rise_and_a_short_array_leaves_draws(self):  # --- MVP (P751) ---
+        g = Grains(look=array("i", [0, 32768]))
+        g.add_pops(2, array("b", [5, 4]))
+        out = g.render(120)
+        self.assertEqual(g.counts(), (2, 2, 0))
+        self.assertGreater(out[0], 0.55 * (5000 + 20000))  # a 5 and a 4 at once: both loud, in the sum
+
+    def test_more_than_8_pops_in_a_call_store_0_past_the_ring(self):  # --- MVP (P751) ---
+        g = Grains()
+        g.add_pops(12, array("b", [5] * 12))
+        self.assertEqual(list(g.m._state(g.state).rise), [0] * 4 + [5] * 4)  # pops 8 to 11 store 0 over pops 0 to 3
+        g.add_pops(10)  # more than the ring: all 8 overwritten with 0
+        self.assertEqual(list(g.m._state(g.state).rise), [0] * 8)
+
+    def test_the_rise_ring_overwrites_the_oldest_when_over_8_wait(self):  # --- MVP (P751) ---
+        g = Grains()
+        g.add_pops(6, array("b", [2, 2, 2, 2, 2, 2]))
+        g.add_pops(4, array("b", [5, 5, 5, 5]))  # pops 6 to 9: slots 6, 7, 0, 1
+        self.assertEqual(list(g.m._state(g.state).rise), [5, 5, 2, 2, 2, 2, 5, 5])
+
+    def test_rises_0_to_5_are_stored_as_given_and_none_is_all_draw(self):  # --- MVP (P751) ---
+        g = Grains()
+        g.add_pops(6, array("b", range(6)))
+        self.assertEqual(list(g.m._state(g.state).rise)[:6], list(range(6)))
+        g.add_pops(8, None)
+        self.assertEqual(list(g.m._state(g.state).rise), [0] * 8)
 
     def test_peak_clamps_under_a_loud_bank(self):
         g = Grains(samples=bank(32767))

@@ -10,6 +10,7 @@
 
 #define FX_FIRE_MAX_SPOTS 16
 #define FX_FIRE_MAX_EMBERS 24
+#define FX_FIRE_MAX_RISES 8  // births whose rise speed is kept between two takes (P751)
 // The cooling map's width and height, each a power of 2. 256 wide, so it never repeats across a field up to 256 wide (the
 // games' fields are 160); a wider field, up to the binding's 1,024, repeats it every 256 cells
 #define FX_FIRE_MAP_W 256
@@ -36,6 +37,7 @@ typedef struct {
     int32_t base;  // 1: the step makes the bottom row; 0: it clears it (P596)
     int32_t filter;  // FX_FIRE_NEAREST or FX_FIRE_LINEAR, see fx_fire_set_filter (P608)
     int32_t born;  // the embers born since fx_fire_take_births last read it (P747)
+    int32_t born_rise[FX_FIRE_MAX_RISES];  // the rise (2 to 5) of the first FX_FIRE_MAX_RISES of them (P751)
 } fx_fire_t;
 
 // Zero the field, seed the random numbers (a seed of 0 becomes 1), make the cooling map and place the spots. The look
@@ -98,7 +100,9 @@ void fx_fire_set_filter(fx_fire_t *f, int32_t filter);
 // with the sparks on screen. A birth is an ember that takes a slot. A draw that finds all FX_FIRE_MAX_EMBERS slots
 // taken is no birth. An ember that leaves the field in its first step (born at x 0 and blown left) still counts,
 // with no spark drawn.
-int32_t fx_fire_take_births(fx_fire_t *f);
+// --- MVP (P751) --- rises: NULL, or n bytes that get each birth's rise speed (2 to 5 rows a step), in birth order, and
+// 0 past the births. Only the first FX_FIRE_MAX_RISES births keep a rise, so later ones read 0 (no rise known).
+int32_t fx_fire_take_births(fx_fire_t *f, int8_t *rises, int32_t n);
 
 // --- Later, not MVP: kept for other games, the PO 2026-11-04 (P602) ---
 // The world moves under the screen by dx cells, -1024 to 1024 checked by the caller: every row shifts by dx (negative

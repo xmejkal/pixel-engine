@@ -18,6 +18,7 @@
 #define FX_GRAINS_POP_SLOTS 8  // pops that sound at once; a pop with no free slot counts in dropped
 #define FX_GRAINS_POPS 12  // bank pops at most
 #define FX_GRAINS_SIZES 3  // pop sizes: 0 small to 2 big
+#define FX_GRAINS_RISES 8  // pops whose ember rise is kept until they start (a ring)
 #define FX_GRAINS_PEAK 32767
 #define FX_GRAINS_INDEX_INTS (1 + 3 * FX_GRAINS_POPS)  // the index's int32 count at most
 #define FX_GRAINS_LOOK_INTS 2
@@ -30,6 +31,7 @@ typedef struct {
     int32_t bed_len, bank_len, n_pops;  // samples in the bed, in the whole bank, pops in the bank
     int32_t bed_gain, pop_gain;  // the look, Q15
     int32_t popped, started, dropped;  // popped has one writer (add_pops), started and dropped another (render)
+    int32_t rise[FX_GRAINS_RISES];  // the ring: pop number p keeps its rise at p & 7; add_pops writes, render reads
     int32_t next_in;  // samples until the next grain starts
     int32_t lev1, lev2;  // the bed level's two slow low-passes over the noise, in 1/16
     int32_t g_pos[FX_GRAINS_BED_SLOTS];  // samples played of the grain; a slot is free when g_pos >= g_len
@@ -52,7 +54,14 @@ typedef struct {
 int32_t fx_grains_init(fx_grains_t *g, uint32_t seed, const int32_t *look, const int32_t *index, int32_t index_ints);
 
 // n more pops, n >= 0. They start in the next render. Only this adds to popped.
-void fx_grains_add_pops(fx_grains_t *g, int32_t n);
+// --- MVP (P751) --- rises: NULL, or at least min(n, FX_GRAINS_RISES) bytes, the ember rise speed (2 to 5) of each new
+// pop. A pop with no rise (NULL, 0, or past the first FX_GRAINS_RISES of the call) draws its size. With more than
+// FX_GRAINS_RISES pops waiting, a new rise overwrites the oldest one's, which then plays with the newer rise.
+void fx_grains_add_pops(fx_grains_t *g, int32_t n, const int8_t *rises);
+
+// The size of a pop from its rise and the size the u^3 rule drew: rise 5 is the biggest, rise 4 the middle one, and a
+// rise of 2, 3, 0 or any other keeps the drawn size, so slow embers keep the mix and fast ones crack louder.
+int32_t fx_grains_size_of_rise(int32_t rise, int32_t drawn);
 
 // The bank's length in samples, for the caller to check against what it has.
 int32_t fx_grains_bank_len(const fx_grains_t *g);

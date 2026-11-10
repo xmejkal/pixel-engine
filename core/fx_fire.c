@@ -89,6 +89,9 @@ void fx_fire_init(fx_fire_t *f, uint8_t *heat, uint8_t *cooling, int32_t w, int3
     f->base = 1;
     f->filter = FX_FIRE_NEAREST;  // P608
     f->born = 0;  // P747
+    for (int32_t i = 0; i < FX_FIRE_MAX_RISES; i++) {
+        f->born_rise[i] = 0;  // P751
+    }
     memset(f->ember_heat, 0, sizeof f->ember_heat);
     memset(heat, 0, (size_t)w * (size_t)h);
     make_cooling(f);
@@ -154,6 +157,9 @@ static void embers_step(fx_fire_t *f, int32_t wind) {
                 f->ember_vx[i] = (int32_t)((r >> 18) & 127) - 64 + wind / 8;
                 f->ember_vy[i] = -(2 + (int32_t)((r >> 16) & 3)) * 256;
                 f->ember_heat[i] = 255;
+                if (f->born < FX_FIRE_MAX_RISES) {
+                    f->born_rise[f->born] = -f->ember_vy[i] / 256;  // P751
+                }
                 f->born++;  // P747
                 break;
             }
@@ -391,8 +397,11 @@ void fx_fire_scroll(fx_fire_t *f, int32_t dx) {
 }
 
 // --- MVP (P747) ---
-int32_t fx_fire_take_births(fx_fire_t *f) {
-    int32_t n = f->born;
+int32_t fx_fire_take_births(fx_fire_t *f, int8_t *rises, int32_t n) {
+    int32_t births = f->born;
+    for (int32_t i = 0; rises != NULL && i < n; i++) {  // P751
+        rises[i] = i < births && i < FX_FIRE_MAX_RISES ? (int8_t)f->born_rise[i] : 0;
+    }
     f->born = 0;
-    return n;
+    return births;
 }
