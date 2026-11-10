@@ -9,3 +9,5 @@ SRC = crackle_mod.c ../../core/fx_crackle.c ../../core/fx_grains.c ../../core/fx
 ARCH ?= xtensawin
 CFLAGS += -I../../core -fno-builtin
 include $(MPY_DIR)/py/dynruntime.mk
+# -O2 after the .mk, whose -Os would win: the 8 whoosh voices cost about 600 us a block at -Os (run148)
+CFLAGS += -O2
