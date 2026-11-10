@@ -1,5 +1,5 @@
-"""core/fx_noise.c (P753) on the Mac, through tests/grains_lib.py, against a Python reference of it: the same seed and the
-same calls give the same samples and the same state. The reference asserts that every intermediate stays under 2^31,
+"""core/fx_noise.c (P753) on the Mac, through tests/grains_lib.py, against a Python reference of it: the same seed and
+the same calls give the same samples and the same state. The reference asserts that every intermediate stays under 2^31,
 and the worst input (the signs of the impulse response) is checked for the bounds the header writes. Run from the
 repository root: python3 -m unittest discover tests. --- MVP (P753) ---"""
 
