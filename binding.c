@@ -7,6 +7,8 @@
 // in a box, their hits as events, drawn into the s3lcd frame. --- MVP (P598) ---
 #include "py/runtime.h"
 
+#include <string.h>
+
 #include "esp_heap_caps.h"
 #include "driver/gpio.h"
 #include "esp_lcd_panel_io.h"
@@ -309,11 +311,21 @@ static mp_obj_t heat_field_draw(size_t n_args, const mp_obj_t *args) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(heat_field_draw_obj, 3, 4, heat_field_draw);
 
-// take_births(): the embers born since the last call, and the count back to 0 (P747).
-static mp_obj_t heat_field_take_births(mp_obj_t self_in) {
-    return MP_OBJ_NEW_SMALL_INT(fx_fire_take_births(&field(self_in)->fire));
+// take_births(rises=None): the embers born since the last call, and the count back to 0 (P747). With an array("b"),
+// each birth's rise speed (2 to 5) goes into it, 0 past the births and past the 8 that keep a rise (P751).
+static mp_obj_t heat_field_take_births(size_t n_args, const mp_obj_t *args) {
+    heat_field_obj_t *self = field(args[0]);
+    if (n_args < 2 || args[1] == mp_const_none) {
+        return MP_OBJ_NEW_SMALL_INT(fx_fire_take_births(&self->fire, NULL, 0));
+    }
+    mp_buffer_info_t info;
+    mp_get_buffer_raise(args[1], &info, MP_BUFFER_WRITE);
+    if (info.typecode != 'b') {
+        mp_raise_ValueError(MP_ERROR_TEXT("an array('b') is needed"));
+    }
+    return MP_OBJ_NEW_SMALL_INT(fx_fire_take_births(&self->fire, info.buf, (int32_t)info.len));
 }
-static MP_DEFINE_CONST_FUN_OBJ_1(heat_field_take_births_obj, heat_field_take_births);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(heat_field_take_births_obj, 1, 2, heat_field_take_births);
 
 // __del__(): free the field once.
 static mp_obj_t heat_field_del(mp_obj_t self_in) {
@@ -356,6 +368,90 @@ static MP_DEFINE_CONST_OBJ_TYPE(
     make_new, heat_field_make_new,
     attr, heat_field_attr,
     locals_dict, &heat_field_locals);
+
+// --- MVP (P751): engine.SoundBank ---
+
+typedef struct {
+    mp_obj_base_t base;
+    uint8_t *buf;  // NULL once freed
+    size_t len;
+    bool psram;
+} sound_bank_obj_t;
+
+static const mp_obj_type_t sound_bank_type;
+
+// SoundBank(nbytes): a buffer of nbytes outside the GC heap, in PSRAM when there is room, else in internal RAM, so a
+// collection does not mark it (a 247 KB bank on the GC heap cost 7.6 ms a collection). It has the buffer protocol,
+// read and write: f.readinto(bank) fills it, and crackle_c.grains_render(state, bank, buf) reads it. The finaliser
+// frees it, like HeatField's. Keep no view (memoryview) of it past its owner: after __del__ the buffer protocol raises.
+static mp_obj_t sound_bank_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    mp_arg_check_num(n_args, n_kw, 1, 1, false);
+    mp_int_t n = mp_obj_get_int(args[0]);
+    if (n <= 0 || n > 4 * 1024 * 1024) {
+        mp_raise_ValueError(MP_ERROR_TEXT("nbytes is 1 to 4 MiB"));
+    }
+    sound_bank_obj_t *self = mp_obj_malloc_with_finaliser(sound_bank_obj_t, type);
+    self->buf = NULL;  // the object first: a failed allocation then leaks nothing
+    self->len = (size_t)n;
+    self->psram = true;
+    uint8_t *buf = heap_caps_malloc((size_t)n, MALLOC_CAP_SPIRAM);
+    if (buf == NULL) {
+        self->psram = false;
+        buf = heap_caps_malloc((size_t)n, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    }
+    if (buf == NULL) {
+        mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("no room for the sound bank"));
+    }
+    memset(buf, 0, (size_t)n);
+    self->buf = buf;
+    return MP_OBJ_FROM_PTR(self);
+}
+
+static mp_int_t sound_bank_get_buffer(mp_obj_t self_in, mp_buffer_info_t *bufinfo, mp_uint_t flags) {
+    (void)flags;
+    sound_bank_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    if (self->buf == NULL) {
+        mp_raise_ValueError(MP_ERROR_TEXT("the sound bank is freed"));
+    }
+    bufinfo->buf = self->buf;
+    bufinfo->len = self->len;
+    bufinfo->typecode = 'B';
+    return 0;
+}
+
+static mp_obj_t sound_bank_del(mp_obj_t self_in) {
+    sound_bank_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    if (self->buf != NULL) {
+        heap_caps_free(self->buf);
+        self->buf = NULL;
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(sound_bank_del_obj, sound_bank_del);
+
+// where: "internal" or "psram"
+static void sound_bank_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
+    if (attr == MP_QSTR_where && dest[0] == MP_OBJ_NULL) {
+        sound_bank_obj_t *self = MP_OBJ_TO_PTR(self_in);
+        dest[0] = MP_OBJ_NEW_QSTR(self->psram ? MP_QSTR_psram : MP_QSTR_internal);
+    } else {
+        dest[1] = MP_OBJ_SENTINEL;
+    }
+}
+
+static const mp_rom_map_elem_t sound_bank_locals_table[] = {
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&sound_bank_del_obj) },
+};
+static MP_DEFINE_CONST_DICT(sound_bank_locals, sound_bank_locals_table);
+
+static MP_DEFINE_CONST_OBJ_TYPE(
+    sound_bank_type,
+    MP_QSTR_SoundBank,
+    MP_TYPE_FLAG_NONE,
+    make_new, sound_bank_make_new,
+    attr, sound_bank_attr,
+    buffer, sound_bank_get_buffer,
+    locals_dict, &sound_bank_locals);
 
 // --- MVP (P598): engine.Balls ---
 
@@ -552,6 +648,7 @@ static const mp_rom_map_elem_t engine_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_HIT), MP_ROM_INT(EVENT_HIT) },
     { MP_ROM_QSTR(MP_QSTR_SLEEP), MP_ROM_INT(EVENT_SLEEP) },
     { MP_ROM_QSTR(MP_QSTR_HeatField), MP_ROM_PTR(&heat_field_type) },
+    { MP_ROM_QSTR(MP_QSTR_SoundBank), MP_ROM_PTR(&sound_bank_type) },  // P751
     { MP_ROM_QSTR(MP_QSTR_Balls), MP_ROM_PTR(&balls_type) },  // P598
     { MP_ROM_QSTR(MP_QSTR_NEAREST), MP_ROM_INT(FX_FIRE_NEAREST) },  // P608: HeatField.set_filter's filters
     { MP_ROM_QSTR(MP_QSTR_LINEAR), MP_ROM_INT(FX_FIRE_LINEAR) },
