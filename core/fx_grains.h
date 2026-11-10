@@ -6,7 +6,7 @@
 // --- MVP (P751) ---
 //
 // Every value is bounded, so int32 never overflows: samples under 2^15, gains and windows in Q15 (32768 is 1.0), a
-// product has one factor under 2^15 and one at most 2^15, and the bed length is under 2^17 samples. No / or %: a
+// product has one factor under 2^15 and one at most 2^15, and the bed length is under 2^17 samples. No / or % in render: a
 // grain's length is 2^10, 2^11 or 2^12 samples (64, 128 or 256 ms), and its window is a shift: a ramp of FADE samples in,
 // flat, a ramp out.
 #ifndef FX_GRAINS_H
@@ -53,10 +53,10 @@ typedef struct {
 // bank, 1 to 12 pops and every size at least once; the bed is samples 0 to bed_len - 1 and a pop lies after it.
 int32_t fx_grains_init(fx_grains_t *g, uint32_t seed, const int32_t *look, const int32_t *index, int32_t index_ints);
 
-// n more pops, n >= 0. They start in the next render. Only this adds to popped.
+// n more pops, 0 to 1000 (checked by the caller). They start in the next render. Only this adds to popped.
 // --- MVP (P751) --- rises: NULL, or at least min(n, FX_GRAINS_RISES) bytes, the ember rise speed (2 to 5) of each new
-// pop. A pop with no rise (NULL, 0, or past the first FX_GRAINS_RISES of the call) draws its size. With more than
-// FX_GRAINS_RISES pops waiting, a new rise overwrites the oldest one's, which then plays with the newer rise.
+// pop. A pop with no rise (NULL, 0, or past the first FX_GRAINS_RISES of the call) draws its size. The ring keeps the
+// rises of the newest FX_GRAINS_RISES pops, so with more pops waiting, an older pop plays with a newer pop's rise.
 void fx_grains_add_pops(fx_grains_t *g, int32_t n, const int8_t *rises);
 
 // The size of a pop from its rise and the size the u^3 rule drew: rise 5 is the biggest, rise 4 the middle one, and a

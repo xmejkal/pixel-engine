@@ -65,11 +65,9 @@ int32_t fx_grains_init(fx_grains_t *g, uint32_t seed, const int32_t *look, const
 }
 
 void fx_grains_add_pops(fx_grains_t *g, int32_t n, const int8_t *rises) {
-    for (int32_t j = 0; j < n && j < FX_GRAINS_RISES; j++) {
-        g->rise[(g->popped + j) & (FX_GRAINS_RISES - 1)] = rises ? rises[j] : 0;
-    }
-    for (int32_t j = FX_GRAINS_RISES; j < n; j++) {
-        g->rise[(g->popped + j) & (FX_GRAINS_RISES - 1)] = 0;
+    // Only the last FX_GRAINS_RISES pops of the call get a slot, so a pop never overwrites a rise of its own call
+    for (int32_t j = n > FX_GRAINS_RISES ? n - FX_GRAINS_RISES : 0; j < n; j++) {
+        g->rise[(g->popped + j) & (FX_GRAINS_RISES - 1)] = rises && j < FX_GRAINS_RISES ? rises[j] : 0;
     }
     g->popped += n;
 }

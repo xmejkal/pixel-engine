@@ -99,7 +99,11 @@ static mp_obj_t grains_add_pops(size_t n_args, const mp_obj_t *args) {
             rises[i] = ((const int8_t *)info.buf)[i];
         }
     }
-    fx_grains_add_pops(grains_state(args[0]), mp_obj_get_int(args[1]), have ? rises : NULL);
+    mp_int_t n = mp_obj_get_int(args[1]);
+    if (n < 0 || n > 1000) {
+        mp_raise_ValueError(MP_ERROR_TEXT("n is 0 to 1000"));
+    }
+    fx_grains_add_pops(grains_state(args[0]), n, have ? rises : NULL);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(grains_add_pops_obj, 2, 3, grains_add_pops);
