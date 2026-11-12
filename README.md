@@ -16,11 +16,11 @@ and per pixel: it steps the bodies, collides the balls, burns and blends the fir
 
 ## What it looks like
 
-The three layers, as pixel-games draws them on a Mac with the same C through ctypes and a stand-in for the display (its `tools/render_scene.py --all docs/screenshots`, pixel-games commit eea160f5). The frames are renders, not photos of the board.
+pixel-games draws the three layers on a Mac with this repository's C and a stand-in for the display. Its `tools/render_scene.py --all docs/screenshots` wrote these frames at pixel-games commit eea160f5. They are renders, not photos of the board.
 
 ![The heat field](docs/screenshots/heat-field.gif)
 
-`fx_fire.c`, the heat field: it burns over the whole 320 x 240 screen, and the flames lean with the wind.
+`fx_fire.c`, the heat field: it burns over the whole 320 x 240 screen, under the label that names the mode and the frame rate.
 
 ![The balls](docs/screenshots/balls.gif)
 
@@ -28,7 +28,7 @@ The three layers, as pixel-games draws them on a Mac with the same C through cty
 
 ![The bodies](docs/screenshots/bodies.gif)
 
-`world.c`, the bodies: 160 boxes fall, land on each other and pile up on the ground.
+`world.c`, the bodies: 160 boxes fall, bounce and come to rest near the bottom, each on its own line, and a sleeper falls again from the top.
 
 The history before this repository lives in pixel-games. A PR number in a commit message (for example `#16`) is a
 pixel-games PR.
