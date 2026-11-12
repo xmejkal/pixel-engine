@@ -14,6 +14,22 @@ and per pixel: it steps the bodies, collides the balls, burns and blends the fir
 | `driver/` | a git submodule: the [s3lcd fork](https://github.com/xmejkal/s3lcd). The binding draws into its frame, and `fx_fire.c` uses its `blend565.h` |
 | `tests/` | the Mac tests of the core: clang builds it, and ctypes calls it |
 
+## What it looks like
+
+The three layers, as pixel-games draws them on a Mac with the same C through ctypes and a stand-in for the display (its `tools/render_scene.py --all docs/screenshots`, pixel-games commit eea160f5). The frames are renders, not photos of the board.
+
+![The heat field](docs/screenshots/heat-field.gif)
+
+`fx_fire.c`, the heat field: it burns over the whole 320 x 240 screen, and the flames lean with the wind.
+
+![The balls](docs/screenshots/balls.gif)
+
+`fx_balls.c` and `grid.c`, the balls: a pour of ten balls every 0.4 s falls, knocks, bounces and piles up in layers of colour.
+
+![The bodies](docs/screenshots/bodies.gif)
+
+`world.c`, the bodies: 160 boxes fall, land on each other and pile up on the ground.
+
 The history before this repository lives in pixel-games. A PR number in a commit message (for example `#16`) is a
 pixel-games PR.
 
