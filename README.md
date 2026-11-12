@@ -28,7 +28,7 @@ pixel-games draws the three layers on a Mac with this repository's C and a stand
 
 ![The bodies](docs/screenshots/bodies.gif)
 
-`world.c`, the bodies: 160 boxes fall, bounce and come to rest near the bottom, each on its own line, and a sleeper falls again from the top.
+`world.c`, the bodies: 160 boxes fall, bounce and come to rest near the bottom, each on its own line, then fall again from the top.
 
 The history before this repository lives in pixel-games. A PR number in a commit message (for example `#16`) is a
 pixel-games PR.
