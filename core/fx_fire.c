@@ -372,6 +372,40 @@ void fx_fire_burn(fx_fire_t *f, int32_t x0, int32_t y0, int32_t x1, int32_t y1, 
     }
 }
 
+// --- MVP (P803) ---
+void fx_fire_cool(fx_fire_t *f, int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint8_t amount) {
+    int32_t t;
+    if (amount == 0) {
+        return;  // nothing is taken, so nothing changes, embers included
+    }
+    if (x0 > x1) {
+        t = x0, x0 = x1, x1 = t;
+    }
+    if (y0 > y1) {
+        t = y0, y0 = y1, y1 = t;
+    }
+    x0 = x0 < 0 ? 0 : x0;
+    y0 = y0 < 0 ? 0 : y0;
+    x1 = x1 >= f->w ? f->w - 1 : x1;
+    y1 = y1 >= f->h ? f->h - 1 : y1;
+    if (x0 > x1 || y0 > y1) {
+        return;  // the rectangle lies outside the field
+    }
+    for (int32_t y = y0; y <= y1; y++) {
+        uint8_t *row = f->heat + y * f->w;
+        for (int32_t x = x0; x <= x1; x++) {
+            row[x] = row[x] > amount ? (uint8_t)(row[x] - amount) : 0;
+        }
+    }
+    for (int32_t i = 0; i < FX_FIRE_MAX_EMBERS; i++) {  // an ember's cell is (x / 256, y / 256), as fx_fire_step's
+        int32_t ex = f->ember_x[i], ey = f->ember_y[i];
+        if (f->ember_heat[i] != 0 && ex >= 0 && ey >= 0 && ex / 256 >= x0 && ex / 256 <= x1 && ey / 256 >= y0
+            && ey / 256 <= y1) {
+            f->ember_heat[i] = 0;
+        }
+    }
+}
+
 // --- Later, not MVP: kept for other games, the PO 2026-11-04 (P602) ---
 void fx_fire_scroll(fx_fire_t *f, int32_t dx) {
     int32_t w = f->w, h = f->h, n = dx < 0 ? -dx : dx;
