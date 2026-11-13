@@ -53,7 +53,7 @@ class Heat:
         return list(self.heat)
 
     def state(self):
-        """Every byte of fx_fire_t but the two pointers, which a cool does not move."""
+        """Every byte of fx_fire_t, the heat and cooling pointers included (a cool moves neither)."""
         return bytes(self.f)
 
 
@@ -61,7 +61,8 @@ def expected(before, x0, y0, x1, y1, amount):
     """The cells after the cool, in Python: the inclusive rectangle, ends swapped and clipped, each cell less amount,
     and the guard as it was."""
     x0, x1, y0, y1 = min(x0, x1), max(x0, x1), min(y0, y1), max(y0, y1)
-    return [max(0, v - amount) if i < W * H and x0 <= i % W <= x1 and y0 <= i // W <= y1 else v for i, v in enumerate(before)]
+    inside = [i < W * H and x0 <= i % W <= x1 and y0 <= i // W <= y1 for i in range(len(before))]
+    return [max(0, v - amount) if k else v for k, v in zip(inside, before)]
 
 
 @unittest.skipUnless(HAVE_CLANG, "clang is missing: core/fx_fire.c is not built")
@@ -101,8 +102,8 @@ class FireCoolTest(unittest.TestCase):
         self.assertEqual(a.cells(), b.cells())
 
     def test_a_rectangle_off_the_field_is_clipped(self):
-        for rect in ((-W, -H, 3, 2), (W - 3, H - 2, 2 * W, 2 * H), (-W, 5, 2 * W, 5), (W, 0, 2 * W, H - 1), (W - 2, 0, W, H),
-                     (-W, -H, -1, -1)):
+        for rect in ((-W, -H, 3, 2), (W - 3, H - 2, 2 * W, 2 * H), (-W, 5, 2 * W, 5), (W, 0, 2 * W, H - 1),
+                     (W - 2, 0, W, H), (-W, -H, -1, -1)):
             with self.subTest(rect=rect):
                 field = Heat(self.lib)
                 before = field.cells()

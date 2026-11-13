@@ -114,8 +114,8 @@ void fx_fire_stats(const fx_fire_t *f, int32_t threshold, int32_t *total, int32_
 // --- MVP (P803) ---
 // Cool a rectangle: every cell from (x0, y0) to (x1, y1), both ends inclusive and clipped to the field, loses amount
 // heat, at least 0, so 255 clears it. The ends are swapped when x0 > x1 or y0 > y1. An ember whose cell lies inside
-// dies, unless amount is 0, which changes nothing. Nothing else changes, and it takes no draw. The name is the look's: cool is heat taken away (a game ends one
-// fire and leaves the others burning).
+// dies, unless amount is 0, which changes nothing. Nothing else changes, and it takes no draw. The name is the look's:
+// cool is heat taken away (a game ends one fire and leaves the others burning).
 void fx_fire_cool(fx_fire_t *f, int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint8_t amount);
 
 // --- Later, not MVP: kept for other games, the PO 2026-11-04 (P602) ---
