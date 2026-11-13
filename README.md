@@ -11,7 +11,7 @@ and per pixel: it steps the bodies, collides the balls, burns and blends the fir
 | `core/` | plain C with no MicroPython in it: `world.c` (bodies that fall and land), `fx_balls.c` and `grid.c` (balls that collide), `fx_fire.c` (the heat field), `events.h` (hits and sleeps) |
 | `binding.c` | the MicroPython module `engine`: `Bodies`, `Balls` and `HeatField` over the core |
 | `micropython.cmake` | the user C module that a MicroPython build includes |
-| `driver/` | a git submodule: the [s3lcd fork](https://github.com/xmejkal/s3lcd). The binding draws into its frame, and `fx_fire.c` uses its `blend565.h` |
+| `driver/` | a git submodule: the [s3lcd fork](https://github.com/xmejkal/s3lcd). The binding draws into its frame, and `fx_fire.c` uses its `blend565.h`. Its files keep their own licence terms: see `driver/LICENSE` and any file's own header |
 | `tests/` | the Mac tests of the core: clang builds it, and ctypes calls it |
 
 ## What it looks like
