@@ -248,6 +248,26 @@ static mp_obj_t heat_field_burn(size_t n_args, const mp_obj_t *args) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(heat_field_burn_obj, 7, 7, heat_field_burn);
 
+// --- MVP (P803) ---
+// cool(x0, y0, x1, y1, amount): see fx_fire_cool, in cells, both ends inclusive. The ends may lie off the field by up
+// to a field's size, as burn's, and amount is 0 to 255 (255 clears). Firmware built before P803 has no cool, so a
+// game asks hasattr(field, "cool").
+static mp_obj_t heat_field_cool(size_t n_args, const mp_obj_t *args) {
+    heat_field_obj_t *self = live(args[0]);
+    int32_t w = self->fire.w, h = self->fire.h;
+    mp_int_t v[5];
+    for (size_t k = 0; k < 5; k++) {
+        v[k] = mp_obj_get_int(args[k + 1]);
+    }
+    if (v[0] < -w || v[0] > 2 * w || v[2] < -w || v[2] > 2 * w || v[1] < -h || v[1] > 2 * h || v[3] < -h
+        || v[3] > 2 * h || v[4] < 0 || v[4] > 255) {
+        mp_raise_ValueError(MP_ERROR_TEXT("x within -w to 2w, y within -h to 2h, amount 0 to 255"));
+    }
+    fx_fire_cool(&self->fire, (int32_t)v[0], (int32_t)v[1], (int32_t)v[2], (int32_t)v[3], (uint8_t)v[4]);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(heat_field_cool_obj, 6, 6, heat_field_cool);
+
 #define HEAT_MAX_STEPS 64  // a frame takes at most 2 steps, so more than 64 is a mistake
 
 // step(steps, wind): see fx_fire_step.
@@ -369,6 +389,7 @@ static const mp_rom_map_elem_t heat_field_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_set_base), MP_ROM_PTR(&heat_field_set_base_obj) },
     { MP_ROM_QSTR(MP_QSTR_set_filter), MP_ROM_PTR(&heat_field_set_filter_obj) },  // P608
     { MP_ROM_QSTR(MP_QSTR_burn), MP_ROM_PTR(&heat_field_burn_obj) },
+    { MP_ROM_QSTR(MP_QSTR_cool), MP_ROM_PTR(&heat_field_cool_obj) },  // P803
     { MP_ROM_QSTR(MP_QSTR_scroll), MP_ROM_PTR(&heat_field_scroll_obj) },  // P602
     { MP_ROM_QSTR(MP_QSTR_draw), MP_ROM_PTR(&heat_field_draw_obj) },
     { MP_ROM_QSTR(MP_QSTR_take_births), MP_ROM_PTR(&heat_field_take_births_obj) },  // P747

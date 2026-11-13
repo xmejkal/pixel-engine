@@ -14,6 +14,10 @@ and per pixel: it steps the bodies, collides the balls, burns and blends the fir
 | `driver/` | a git submodule: the [s3lcd fork](https://github.com/xmejkal/s3lcd). The binding draws into its frame, and `fx_fire.c` uses its `blend565.h`. Its files keep their own licence terms: see `driver/LICENSE` and any file's own header |
 | `tests/` | the Mac tests of the core: clang builds it, and ctypes calls it |
 
+`HeatField.cool(x0, y0, x1, y1, amount)` (P803) takes amount heat from every cell of a rectangle, both ends included,
+down to 0 at least, so 255 clears it, and the embers inside die. Firmware built from an engine before P803 lacks it,
+so a game asks `hasattr(field, "cool")`.
+
 ## What it looks like
 
 pixel-games draws the three layers on a Mac with this repository's C and a stand-in for the display. Its `tools/render_scene.py --all docs/screenshots` wrote these frames at pixel-games commit eea160f5. They are renders, not photos of the board.
