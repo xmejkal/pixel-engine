@@ -1,5 +1,5 @@
 """core/grid.c and fx_balls.c on the Mac (P598): clang_lib builds them once, and CBalls stands in for
-engine.Balls (binding.c) through ctypes, with the binding's checks, so a test refuses what the board refuses.
+_engine.Balls (binding.c) through ctypes, with the binding's checks, so a test refuses what the board refuses.
 The checks are written twice, here and in binding.c, and the tests see only this copy: a change to one changes the
 other.
 Grid is the Mac's own look at grid.c. --- MVP (P598) ---"""
@@ -63,7 +63,7 @@ class Grid:
 
 
 class CBalls:
-    """engine.Balls on fx_balls.c: the same methods, the same errors. xy() is the Mac's own look at the float x and y."""
+    """_engine.Balls on fx_balls.c: the same methods, the same errors. xy() is the Mac's look at the float x and y."""
 
     def __init__(self, n):
         if not 1 <= n <= MAX_BALLS:
@@ -131,5 +131,5 @@ class CBalls:
 
 
 def engine():
-    """A stand-in for the engine module's balls part: Balls and HIT."""
+    """A stand-in for the `_engine` module's balls part: Balls and HIT."""
     return types.SimpleNamespace(Balls=CBalls, HIT=HIT)

@@ -1,4 +1,4 @@
-# The engine module: the world (P590, engine.Bodies), the fire (P595, HeatField) and the balls (P598, Balls, on the
+# The `_engine` module: the world (P590, _engine.Bodies), the fire (P595, HeatField) and the balls (P598, Balls, on the
 # grid) in core/, and their MicroPython binding. The binding draws into s3lcd's frame, so it reads the s3lcd header in
 # the driver/ submodule.
 add_library(usermod_engine INTERFACE)

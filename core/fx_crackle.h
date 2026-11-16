@@ -1,6 +1,6 @@
 // The fire's crackle (P747): a soft roar and one pop per ember, rendered into 16 kHz int16 mono samples. Plain C99
 // with no libc call and no MicroPython or IDF header, so the Mac test builds it with clang, and the board loads it as
-// the native module crackle_c (natmod/crackle) with no firmware rebuild. games/crackle.py's Crackle is the same
+// the native module _crackle (natmod/crackle) with no firmware rebuild. games/crackle.py's Crackle is the same
 // sound in plain Python, the naive path and the reference: a Mac test wants the two equal sample for sample.
 // --- MVP (P747) ---
 //

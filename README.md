@@ -9,7 +9,8 @@ and per pixel: it steps the bodies, collides the balls, burns and blends the fir
 | path | what it holds |
 | --- | --- |
 | `core/` | plain C with no MicroPython in it: `world.c` (bodies that fall and land), `fx_balls.c` and `grid.c` (balls that collide), `fx_fire.c` (the heat field), `events.h` (hits and sleeps) |
-| `binding.c` | the MicroPython module `engine`: `Bodies`, `Balls` and `HeatField` over the core |
+| `binding.c` | the MicroPython module `_engine`: `Bodies`, `Balls`, `HeatField` and `SoundBank` over the core |
+| `natmod/crackle/` | the native module `_crackle`: `fx_crackle.c`, `fx_grains.c` and `fx_noise.c` as `_crackle.mpy`, which the board loads with no firmware rebuild |
 | `micropython.cmake` | the user C module that a MicroPython build includes |
 | `driver/` | a git submodule: the [s3lcd fork](https://github.com/xmejkal/s3lcd). The binding draws into its frame, and `fx_fire.c` uses its `blend565.h`. Its files keep their own licence terms: see `driver/LICENSE` and any file's own header |
 | `tests/` | the Mac tests of the core: clang builds it, and ctypes calls it |
@@ -17,6 +18,10 @@ and per pixel: it steps the bodies, collides the balls, burns and blends the fir
 `HeatField.cool(x0, y0, x1, y1, amount)` (P803) takes amount heat from every cell of a rectangle, both ends included,
 down to 0 at least, so 255 clears it, and the embers inside die. Firmware built from an engine before P803 lacks it,
 so a game asks `hasattr(field, "cool")`.
+
+The two module names start with `_` (P847), because a built-in module wins over a package of the same name on
+the board's file system. So pixel-games can keep a Python package `engine` beside the C. Firmware built from an
+engine before P847 names the C module `engine`, and its crackle is `crackle_c.mpy`.
 
 ## What it looks like
 

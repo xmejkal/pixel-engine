@@ -1,4 +1,4 @@
-"""core/world.c on the Mac (P590): clang_lib builds it once, and CBodies stands in for engine.Bodies
+"""core/world.c on the Mac (P590): clang_lib builds it once, and CBodies stands in for _engine.Bodies
 (binding.c) through ctypes, with the binding's checks, so a test refuses what the board refuses. The build takes
 no fused multiply-add (clang_lib.NO_FMA), which the twin's Python maths never does. --- MVP (P590) ---"""
 
@@ -27,7 +27,7 @@ def lib():
 
 
 class CBodies:
-    """engine.Bodies on world.c: the same methods, the same errors. ys() is the Mac's own look at the float y."""
+    """_engine.Bodies on world.c: the same methods, the same errors. ys() is the Mac's own look at the float y."""
 
     def __init__(self, n):
         if not 1 <= n <= MAX_BODIES:
@@ -67,5 +67,5 @@ class CBodies:
 
 
 def engine():
-    """A stand-in for the engine module's world part: Bodies, HIT and SLEEP."""
+    """A stand-in for the `_engine` module's world part: Bodies, HIT and SLEEP."""
     return types.SimpleNamespace(Bodies=CBodies, HIT=HIT, SLEEP=SLEEP)

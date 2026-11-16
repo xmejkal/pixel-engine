@@ -1,5 +1,5 @@
 """core/fx_grains.c and fx_noise.c on the Mac (P751, P753): GrainsModule builds them with clang and has the functions of
-the native module crackle_c (grains_init, grains_add_pops, grains_render, grains_counts, GRAINS_SIZE, and the noise_
+the native module _crackle (grains_init, grains_add_pops, grains_render, grains_counts, GRAINS_SIZE, and the noise_
 functions with NOISE_SIZE), so pixel-games' GrainCrackle and FireSound run on the Mac unchanged, and its tests and
 tools/crackle_wav.py hear the C. --- MVP (P751, P753) ---"""
 
