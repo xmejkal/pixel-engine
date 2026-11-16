@@ -217,12 +217,12 @@ static mp_obj_t heat_field_set_base(mp_obj_t self_in, mp_obj_t on_in) {
 static MP_DEFINE_CONST_FUN_OBJ_2(heat_field_set_base_obj, heat_field_set_base);
 
 // --- MVP (P608) ---
-// set_filter(filter): see fx_fire_set_filter. filter is engine.NEAREST or engine.LINEAR.
+// set_filter(filter): see fx_fire_set_filter. filter is _engine.NEAREST or _engine.LINEAR.
 static mp_obj_t heat_field_set_filter(mp_obj_t self_in, mp_obj_t filter_in) {
     heat_field_obj_t *self = live(self_in);
     mp_int_t filter = mp_obj_get_int(filter_in);
     if (filter != FX_FIRE_NEAREST && filter != FX_FIRE_LINEAR) {
-        mp_raise_ValueError(MP_ERROR_TEXT("filter is engine.NEAREST or engine.LINEAR"));
+        mp_raise_ValueError(MP_ERROR_TEXT("filter is _engine.NEAREST or _engine.LINEAR"));
     }
     fx_fire_set_filter(&self->fire, (int32_t)filter);
     return mp_const_none;
