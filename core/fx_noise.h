@@ -1,6 +1,6 @@
 // The fire's noise (P753): a smooth bed and 8 whoosh voices of filtered noise, mixed into 16 kHz int16 mono samples.
 // Plain C99 with no libc call and no MicroPython or IDF header, so the Mac test builds it with clang, and the board
-// loads it as the native module crackle_c (natmod/crackle). The caller sets targets (a level and a filter coefficient
+// loads it as the native module _crackle (natmod/crackle). The caller sets targets (a level and a filter coefficient
 // for the bed, for each voice), and every sample glides the value 1/512 of the way to its target (about 32 ms). The
 // bed is the fire's steady roar and follows the heat field. A whoosh is a body's air sound, its pitch and level follow
 // the body's speed. "mix" adds into buf, it never queues pops.

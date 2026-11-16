@@ -1,9 +1,9 @@
-// The engine module. engine.Bodies (P590) is the world of core/world.c as a native type: C steps the falling
+// The `_engine` module. _engine.Bodies (P590) is the world of core/world.c as a native type: C steps the falling
 // bodies and keeps the facts of a step as events, which Python drains once a frame (D11 to D13). Its twin is
 // pixel-games games/motion.py's Bodies, with the same API. --- MVP (P590) ---
 // The HeatField part is P595's and is kept (D8): the fire of core/fx_fire.c as a native type, drawn into the
 // s3lcd frame, opaque or blended (P603). --- MVP (P595) ---
-// engine.Balls (P598) is the circle solver of core/fx_balls.c as a native type: balls that fall, knock and pile
+// _engine.Balls (P598) is the circle solver of core/fx_balls.c as a native type: balls that fall, knock and pile
 // in a box, their hits as events, drawn into the s3lcd frame. --- MVP (P598) ---
 #include "py/runtime.h"
 
@@ -22,7 +22,7 @@ _Static_assert(sizeof(int) == sizeof(int32_t), "an array('i') holds int32 events
 
 extern const mp_obj_type_t s3lcd_type;  // s3lcd.c's ESPLCD, so s3lcd stays unchanged
 
-// --- MVP (P590): engine.Bodies ---
+// --- MVP (P590): _engine.Bodies ---
 
 #define BODIES_MAX 256  // n is 1 to 256: the rain's 160 and room
 #define BODIES_MAX_STEPS 64  // a frame takes at most 8 steps (StepClock's cap), so more than 64 is a mistake
@@ -135,7 +135,7 @@ static MP_DEFINE_CONST_OBJ_TYPE(
     attr, bodies_attr,
     locals_dict, &bodies_locals);
 
-// --- MVP (P595): engine.HeatField ---
+// --- MVP (P595): _engine.HeatField ---
 
 typedef struct {
     mp_obj_base_t base;
@@ -217,12 +217,12 @@ static mp_obj_t heat_field_set_base(mp_obj_t self_in, mp_obj_t on_in) {
 static MP_DEFINE_CONST_FUN_OBJ_2(heat_field_set_base_obj, heat_field_set_base);
 
 // --- MVP (P608) ---
-// set_filter(filter): see fx_fire_set_filter. filter is engine.NEAREST or engine.LINEAR.
+// set_filter(filter): see fx_fire_set_filter. filter is _engine.NEAREST or _engine.LINEAR.
 static mp_obj_t heat_field_set_filter(mp_obj_t self_in, mp_obj_t filter_in) {
     heat_field_obj_t *self = live(self_in);
     mp_int_t filter = mp_obj_get_int(filter_in);
     if (filter != FX_FIRE_NEAREST && filter != FX_FIRE_LINEAR) {
-        mp_raise_ValueError(MP_ERROR_TEXT("filter is engine.NEAREST or engine.LINEAR"));
+        mp_raise_ValueError(MP_ERROR_TEXT("filter is _engine.NEAREST or _engine.LINEAR"));
     }
     fx_fire_set_filter(&self->fire, (int32_t)filter);
     return mp_const_none;
@@ -406,7 +406,7 @@ static MP_DEFINE_CONST_OBJ_TYPE(
     attr, heat_field_attr,
     locals_dict, &heat_field_locals);
 
-// --- MVP (P751): engine.SoundBank ---
+// --- MVP (P751): _engine.SoundBank ---
 
 typedef struct {
     mp_obj_base_t base;
@@ -419,7 +419,7 @@ static const mp_obj_type_t sound_bank_type;
 
 // SoundBank(nbytes): a buffer of nbytes outside the GC heap, in PSRAM when there is room, else in internal RAM, so a
 // collection does not mark it (a 247 KB bank on the GC heap cost 7.6 ms a collection). It has the buffer protocol,
-// read and write: f.readinto(bank) fills it, and crackle_c.grains_render(state, bank, buf) reads it. The finaliser
+// read and write: f.readinto(bank) fills it, and _crackle.grains_render(state, bank, buf) reads it. The finaliser
 // frees it, like HeatField's. Keep no view (memoryview) of it past its owner: after __del__ the buffer protocol raises.
 static mp_obj_t sound_bank_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 1, 1, false);
@@ -490,7 +490,7 @@ static MP_DEFINE_CONST_OBJ_TYPE(
     buffer, sound_bank_get_buffer,
     locals_dict, &sound_bank_locals);
 
-// --- MVP (P598): engine.Balls ---
+// --- MVP (P598): _engine.Balls ---
 
 #define BALLS_MAX 2000  // n is 1 to 2,000, about 60 KB: more than fill the screen (the PO: "as many as I want")
 #define BALLS_MAX_STEPS 64  // a frame takes at most 8 steps (StepClock's cap), so more than 64 is a mistake
@@ -680,7 +680,7 @@ static mp_obj_t engine_largest_free_internal(void) {
 static MP_DEFINE_CONST_FUN_OBJ_0(engine_largest_free_internal_obj, engine_largest_free_internal);
 
 static const mp_rom_map_elem_t engine_module_globals_table[] = {
-    { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_engine) },
+    { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR__engine) },
     { MP_ROM_QSTR(MP_QSTR_Bodies), MP_ROM_PTR(&bodies_type) },
     { MP_ROM_QSTR(MP_QSTR_HIT), MP_ROM_INT(EVENT_HIT) },
     { MP_ROM_QSTR(MP_QSTR_SLEEP), MP_ROM_INT(EVENT_SLEEP) },
@@ -698,4 +698,4 @@ const mp_obj_module_t engine_user_cmodule = {
     .globals = (mp_obj_dict_t *)&engine_module_globals,
 };
 
-MP_REGISTER_MODULE(MP_QSTR_engine, engine_user_cmodule);
+MP_REGISTER_MODULE(MP_QSTR__engine, engine_user_cmodule);

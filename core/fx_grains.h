@@ -1,6 +1,6 @@
 // The fire's grains (P751): a bed of overlapping grains cut from a sample bank, and one bank pop per ember, mixed
 // into 16 kHz int16 mono samples. Plain C99 with no libc call and no MicroPython or IDF header, so the Mac test builds
-// it with clang, and the board loads it as the native module crackle_c (natmod/crackle). There is no filter, so
+// it with clang, and the board loads it as the native module _crackle (natmod/crackle). There is no filter, so
 // nothing can ring or overflow. The bank is made on the Mac by pixel-games' tools/fire_bank.py and passed to every
 // render: int16 samples, the bed first, then the pops. The state keeps no pointer, so the caller's bytearrays can move.
 // --- MVP (P751) ---

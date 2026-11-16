@@ -1,5 +1,5 @@
 """core/grid.c and fx_balls.c (P598) on the Mac: tests/balls_lib.py builds them with clang and steps them
-through CBalls, the stand-in for engine.Balls. Run from the repository root: python3 -m unittest discover tests.
+through CBalls, the stand-in for _engine.Balls. Run from the repository root: python3 -m unittest discover tests.
 --- MVP (P598) ---"""
 
 import os

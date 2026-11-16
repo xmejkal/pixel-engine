@@ -1,4 +1,4 @@
-// crackle_c (P747): core/fx_crackle.c as a MicroPython native module, loaded from crackle_c.mpy with no firmware
+// _crackle (P747): core/fx_crackle.c as a MicroPython native module, loaded from _crackle.mpy with no firmware
 // rebuild. The state is a bytearray of SIZE bytes that the caller owns, so the module keeps no globals.
 // games/crackle.py's NativeCrackle is its caller, and GrainCrackle (P751) calls the grains_ functions of
 // core/fx_grains.c. --- MVP (P747, P751) ---

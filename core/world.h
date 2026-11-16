@@ -1,4 +1,4 @@
-// The engine's world (P590): one world_t per engine.Bodies, cap falling bodies as parallel arrays, stepped with the
+// The engine's world (P590): one world_t per _engine.Bodies, cap falling bodies as parallel arrays, stepped with the
 // maths of pixel-games motion.py's fall_bodies (its twin). A step reports its facts as events (a hit with its speed, a body
 // that comes to rest) for Python to drain once a frame and decide what they cause (D12, D13). Plain C99 with no
 // MicroPython or IDF header, so the Mac test builds it with clang and the board build with ESP-IDF (D15, D17).
